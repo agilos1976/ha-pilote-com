@@ -14,10 +14,9 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
-    CONF_ADD_BATTERY_ENTITY,
     CONF_API_KEY,
+    CONF_BATTERY_ENTITY,
     CONF_GRID_ENTITY,
-    CONF_OUT_BATTERY_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
@@ -38,12 +37,8 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
                 default=d.get(CONF_GRID_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
             vol.Required(
-                CONF_ADD_BATTERY_ENTITY,
-                default=d.get(CONF_ADD_BATTERY_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-            vol.Required(
-                CONF_OUT_BATTERY_ENTITY,
-                default=d.get(CONF_OUT_BATTERY_ENTITY),
+                CONF_BATTERY_ENTITY,
+                default=d.get(CONF_BATTERY_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
             vol.Required(
                 CONF_UPDATE_INTERVAL,
@@ -87,10 +82,8 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
             "production_value": self._format_state(self._user_input[CONF_PRODUCTION_ENTITY]),
             "grid_entity": self._user_input[CONF_GRID_ENTITY],
             "grid_value": self._format_state(self._user_input[CONF_GRID_ENTITY]),
-            "add_battery_entity": self._user_input[CONF_ADD_BATTERY_ENTITY],
-            "add_battery_value": self._format_state(self._user_input[CONF_ADD_BATTERY_ENTITY]),
-            "out_battery_entity": self._user_input[CONF_OUT_BATTERY_ENTITY],
-            "out_battery_value": self._format_state(self._user_input[CONF_OUT_BATTERY_ENTITY]),
+            "battery_entity": self._user_input[CONF_BATTERY_ENTITY],
+            "battery_value": self._format_state(self._user_input[CONF_BATTERY_ENTITY]),
         }
 
     async def async_step_user(

@@ -7,23 +7,21 @@
         "data": {
           "production_entity": "Production entity",
           "grid_entity": "Grid entity (import/export)",
-          "add_battery_entity": "Battery charge entity (Add Battery)",
-          "out_battery_entity": "Battery discharge entity (Out Battery)",
+          "battery_entity": "Battery entity (charge/discharge)",
           "update_interval": "Update interval",
           "api_key": "API key"
         },
         "data_description": {
           "production_entity": "Production load curve sensor (e.g. PV power)",
           "grid_entity": "Grid power sensor (positive = import, negative = export)",
-          "add_battery_entity": "Battery charging power sensor",
-          "out_battery_entity": "Battery discharging power sensor",
+          "battery_entity": "Battery power sensor (positive = charge, negative = discharge)",
           "update_interval": "Data sending frequency in hours",
           "api_key": "Your Romande Dynamics API key"
         }
       },
       "verify": {
         "title": "Verify values",
-        "description": "Current values of selected entities:\n\n**Production**: {production_entity}\nCurrent value: **{production_value}**\n\n**Grid**: {grid_entity}\nCurrent value: **{grid_value}**\n\n**Battery charge**: {add_battery_entity}\nCurrent value: **{add_battery_value}**\n\n**Battery discharge**: {out_battery_entity}\nCurrent value: **{out_battery_value}**",
+        "description": "Current values of selected entities:\n\n**Production**: {production_entity}\nCurrent value: **{production_value}**\n\n**Grid**: {grid_entity}\nCurrent value: **{grid_value}**\n\n**Battery**: {battery_entity}\nCurrent value: **{battery_value}**",
         "menu_options": {
           "save": "Confirm and save",
           "modify": "Modify selection"
@@ -35,16 +33,14 @@
         "data": {
           "production_entity": "Production entity",
           "grid_entity": "Grid entity (import/export)",
-          "add_battery_entity": "Battery charge entity (Add Battery)",
-          "out_battery_entity": "Battery discharge entity (Out Battery)",
+          "battery_entity": "Battery entity (charge/discharge)",
           "update_interval": "Update interval",
           "api_key": "API key"
         },
         "data_description": {
           "production_entity": "Production load curve sensor (e.g. PV power)",
           "grid_entity": "Grid power sensor (positive = import, negative = export)",
-          "add_battery_entity": "Battery charging power sensor",
-          "out_battery_entity": "Battery discharging power sensor",
+          "battery_entity": "Battery power sensor (positive = charge, negative = discharge)",
           "update_interval": "Data sending frequency in hours",
           "api_key": "Your Romande Dynamics API key"
         }

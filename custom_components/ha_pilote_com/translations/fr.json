@@ -7,23 +7,21 @@
         "data": {
           "production_entity": "Entité de production",
           "grid_entity": "Entité réseau (import/export)",
-          "add_battery_entity": "Entité charge batterie (Add Battery)",
-          "out_battery_entity": "Entité décharge batterie (Out Battery)",
+          "battery_entity": "Entité batterie (charge/décharge)",
           "update_interval": "Intervalle de mise à jour",
           "api_key": "Clé API"
         },
         "data_description": {
           "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
           "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
-          "add_battery_entity": "Capteur de puissance de charge de la batterie",
-          "out_battery_entity": "Capteur de puissance de décharge de la batterie",
+          "battery_entity": "Capteur de puissance batterie (positif = charge, négatif = décharge)",
           "update_interval": "Fréquence d'envoi des données en heures",
           "api_key": "Votre clé API Romande Dynamics"
         }
       },
       "verify": {
         "title": "Vérification des valeurs",
-        "description": "Valeurs actuelles des entités sélectionnées :\n\n**Production** : {production_entity}\nValeur actuelle : **{production_value}**\n\n**Réseau** : {grid_entity}\nValeur actuelle : **{grid_value}**\n\n**Charge batterie** : {add_battery_entity}\nValeur actuelle : **{add_battery_value}**\n\n**Décharge batterie** : {out_battery_entity}\nValeur actuelle : **{out_battery_value}**",
+        "description": "Valeurs actuelles des entités sélectionnées :\n\n**Production** : {production_entity}\nValeur actuelle : **{production_value}**\n\n**Réseau** : {grid_entity}\nValeur actuelle : **{grid_value}**\n\n**Batterie** : {battery_entity}\nValeur actuelle : **{battery_value}**",
         "menu_options": {
           "save": "Confirmer et enregistrer",
           "modify": "Modifier la sélection"
@@ -35,16 +33,14 @@
         "data": {
           "production_entity": "Entité de production",
           "grid_entity": "Entité réseau (import/export)",
-          "add_battery_entity": "Entité charge batterie (Add Battery)",
-          "out_battery_entity": "Entité décharge batterie (Out Battery)",
+          "battery_entity": "Entité batterie (charge/décharge)",
           "update_interval": "Intervalle de mise à jour",
           "api_key": "Clé API"
         },
         "data_description": {
           "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
           "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
-          "add_battery_entity": "Capteur de puissance de charge de la batterie",
-          "out_battery_entity": "Capteur de puissance de décharge de la batterie",
+          "battery_entity": "Capteur de puissance batterie (positif = charge, négatif = décharge)",
           "update_interval": "Fréquence d'envoi des données en heures",
           "api_key": "Votre clé API Romande Dynamics"
         }

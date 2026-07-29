@@ -14,10 +14,9 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     API_URL,
-    CONF_ADD_BATTERY_ENTITY,
     CONF_API_KEY,
+    CONF_BATTERY_ENTITY,
     CONF_GRID_ENTITY,
-    CONF_OUT_BATTERY_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
@@ -100,19 +99,19 @@ def _aggregate_15min(states: list, period_start: datetime, period_end: datetime)
     return result
 
 
-def _split_grid(grid_history: list[dict]) -> tuple[list[dict], list[dict]]:
-    import_history = []
-    export_history = []
-    for point in grid_history:
+def _split_signed(history: list[dict]) -> tuple[list[dict], list[dict]]:
+    positive = []
+    negative = []
+    for point in history:
         ts = point["timestamp"]
         val = point["value"]
         if val >= 0:
-            import_history.append({"timestamp": ts, "value": val})
-            export_history.append({"timestamp": ts, "value": 0.0})
+            positive.append({"timestamp": ts, "value": val})
+            negative.append({"timestamp": ts, "value": 0.0})
         else:
-            import_history.append({"timestamp": ts, "value": 0.0})
-            export_history.append({"timestamp": ts, "value": abs(val)})
-    return import_history, export_history
+            positive.append({"timestamp": ts, "value": 0.0})
+            negative.append({"timestamp": ts, "value": abs(val)})
+    return positive, negative
 
 
 async def _get_history(hass, start, now, entity_id):
@@ -131,18 +130,16 @@ async def async_setup_entry(
 ) -> bool:
     production_entity = entry.data[CONF_PRODUCTION_ENTITY]
     grid_entity = entry.data[CONF_GRID_ENTITY]
-    add_battery_entity = entry.data[CONF_ADD_BATTERY_ENTITY]
-    out_battery_entity = entry.data[CONF_OUT_BATTERY_ENTITY]
+    battery_entity = entry.data[CONF_BATTERY_ENTITY]
     interval_hours = int(entry.data[CONF_UPDATE_INTERVAL])
     api_key = entry.data[CONF_API_KEY]
 
     async def _send_data(_now=None):
         prod_state = hass.states.get(production_entity)
         grid_state = hass.states.get(grid_entity)
-        add_bat_state = hass.states.get(add_battery_entity)
-        out_bat_state = hass.states.get(out_battery_entity)
+        bat_state = hass.states.get(battery_entity)
 
-        if not all([prod_state, grid_state, add_bat_state, out_bat_state]):
+        if not all([prod_state, grid_state, bat_state]):
             _LOGGER.warning("One or more entities not available")
             return
 
@@ -151,12 +148,13 @@ async def async_setup_entry(
 
         prod_history = await _get_history(hass, start, now, production_entity)
         grid_history = await _get_history(hass, start, now, grid_entity)
-        add_bat_history = await _get_history(hass, start, now, add_battery_entity)
-        out_bat_history = await _get_history(hass, start, now, out_battery_entity)
+        bat_history = await _get_history(hass, start, now, battery_entity)
 
-        import_history, export_history = _split_grid(grid_history)
+        import_history, export_history = _split_signed(grid_history)
+        add_bat_history, out_bat_history = _split_signed(bat_history)
 
         grid_unit = grid_state.attributes.get("unit_of_measurement", "")
+        bat_unit = bat_state.attributes.get("unit_of_measurement", "")
 
         payload = {
             "api_key": api_key,
@@ -167,9 +165,9 @@ async def async_setup_entry(
             "import_history": import_history,
             "export_unit": grid_unit,
             "export_history": export_history,
-            "add_battery_unit": add_bat_state.attributes.get("unit_of_measurement", ""),
+            "add_battery_unit": bat_unit,
             "add_battery_history": add_bat_history,
-            "out_battery_unit": out_bat_state.attributes.get("unit_of_measurement", ""),
+            "out_battery_unit": bat_unit,
             "out_battery_history": out_bat_history,
         }
 
@@ -180,11 +178,10 @@ async def async_setup_entry(
                 ) as resp:
                     if resp.status == 200:
                         _LOGGER.debug(
-                            "History sent: %d prod, %d grid, %d addBat, %d outBat points",
+                            "History sent: %d prod, %d grid, %d bat points",
                             len(prod_history),
                             len(grid_history),
-                            len(add_bat_history),
-                            len(out_bat_history),
+                            len(bat_history),
                         )
                     else:
                         body = await resp.text()
