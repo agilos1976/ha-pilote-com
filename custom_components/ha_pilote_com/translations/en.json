@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HA Pilote Com",
+        "description": "Set up automatic sending of your load curves to Romande Dynamics.",
+        "data": {
+          "production_entity": "Production entity",
+          "consumption_entity": "Consumption entity",
+          "update_interval": "Update interval",
+          "api_key": "API key"
+        },
+        "data_description": {
+          "production_entity": "Production load curve sensor (e.g. PV power)",
+          "consumption_entity": "Consumption load curve sensor",
+          "update_interval": "Data sending frequency in hours",
+          "api_key": "Your Romande Dynamics API key"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure HA Pilote Com",
+        "description": "Modify your integration settings.",
+        "data": {
+          "production_entity": "Production entity",
+          "consumption_entity": "Consumption entity",
+          "update_interval": "Update interval",
+          "api_key": "API key"
+        },
+        "data_description": {
+          "production_entity": "Production load curve sensor (e.g. PV power)",
+          "consumption_entity": "Consumption load curve sensor",
+          "update_interval": "Data sending frequency in hours",
+          "api_key": "Your Romande Dynamics API key"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This API key is already configured."
+    }
+  }
+}
