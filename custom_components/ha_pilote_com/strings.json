@@ -6,7 +6,6 @@
         "description": "Configurez l'envoi automatique de vos courbes de charge vers Romande Dynamics.",
         "data": {
           "production_entity": "Entité de production",
-          "consumption_entity": "Entité de consommation",
           "grid_entity": "Entité réseau (import/export)",
           "add_battery_entity": "Entité charge batterie (Add Battery)",
           "out_battery_entity": "Entité décharge batterie (Out Battery)",
@@ -15,7 +14,6 @@
         },
         "data_description": {
           "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
-          "consumption_entity": "Capteur de la courbe de charge de consommation",
           "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
           "add_battery_entity": "Capteur de puissance de charge de la batterie",
           "out_battery_entity": "Capteur de puissance de décharge de la batterie",
@@ -28,7 +26,6 @@
         "description": "Modifiez les paramètres de votre intégration.",
         "data": {
           "production_entity": "Entité de production",
-          "consumption_entity": "Entité de consommation",
           "grid_entity": "Entité réseau (import/export)",
           "add_battery_entity": "Entité charge batterie (Add Battery)",
           "out_battery_entity": "Entité décharge batterie (Out Battery)",
@@ -37,7 +34,6 @@
         },
         "data_description": {
           "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
-          "consumption_entity": "Capteur de la courbe de charge de consommation",
           "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
           "add_battery_entity": "Capteur de puissance de charge de la batterie",
           "out_battery_entity": "Capteur de puissance de décharge de la batterie",

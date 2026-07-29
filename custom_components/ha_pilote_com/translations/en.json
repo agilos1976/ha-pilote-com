@@ -6,7 +6,6 @@
         "description": "Set up automatic sending of your load curves to Romande Dynamics.",
         "data": {
           "production_entity": "Production entity",
-          "consumption_entity": "Consumption entity",
           "grid_entity": "Grid entity (import/export)",
           "add_battery_entity": "Battery charge entity (Add Battery)",
           "out_battery_entity": "Battery discharge entity (Out Battery)",
@@ -15,7 +14,6 @@
         },
         "data_description": {
           "production_entity": "Production load curve sensor (e.g. PV power)",
-          "consumption_entity": "Consumption load curve sensor",
           "grid_entity": "Grid power sensor (positive = import, negative = export)",
           "add_battery_entity": "Battery charging power sensor",
           "out_battery_entity": "Battery discharging power sensor",
@@ -28,7 +26,6 @@
         "description": "Modify your integration settings.",
         "data": {
           "production_entity": "Production entity",
-          "consumption_entity": "Consumption entity",
           "grid_entity": "Grid entity (import/export)",
           "add_battery_entity": "Battery charge entity (Add Battery)",
           "out_battery_entity": "Battery discharge entity (Out Battery)",
@@ -37,7 +34,6 @@
         },
         "data_description": {
           "production_entity": "Production load curve sensor (e.g. PV power)",
-          "consumption_entity": "Consumption load curve sensor",
           "grid_entity": "Grid power sensor (positive = import, negative = export)",
           "add_battery_entity": "Battery charging power sensor",
           "out_battery_entity": "Battery discharging power sensor",

@@ -16,7 +16,6 @@ from .const import (
     API_URL,
     CONF_ADD_BATTERY_ENTITY,
     CONF_API_KEY,
-    CONF_CONSUMPTION_ENTITY,
     CONF_GRID_ENTITY,
     CONF_OUT_BATTERY_ENTITY,
     CONF_PRODUCTION_ENTITY,
@@ -102,7 +101,6 @@ def _aggregate_15min(states: list, period_start: datetime, period_end: datetime)
 
 
 def _split_grid(grid_history: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Sépare l'historique grid en import (positif) et export (négatif -> abs)."""
     import_history = []
     export_history = []
     for point in grid_history:
@@ -132,7 +130,6 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: HaPiloteComConfigEntry
 ) -> bool:
     production_entity = entry.data[CONF_PRODUCTION_ENTITY]
-    consumption_entity = entry.data[CONF_CONSUMPTION_ENTITY]
     grid_entity = entry.data[CONF_GRID_ENTITY]
     add_battery_entity = entry.data[CONF_ADD_BATTERY_ENTITY]
     out_battery_entity = entry.data[CONF_OUT_BATTERY_ENTITY]
@@ -141,12 +138,11 @@ async def async_setup_entry(
 
     async def _send_data(_now=None):
         prod_state = hass.states.get(production_entity)
-        conso_state = hass.states.get(consumption_entity)
         grid_state = hass.states.get(grid_entity)
         add_bat_state = hass.states.get(add_battery_entity)
         out_bat_state = hass.states.get(out_battery_entity)
 
-        if not all([prod_state, conso_state, grid_state, add_bat_state, out_bat_state]):
+        if not all([prod_state, grid_state, add_bat_state, out_bat_state]):
             _LOGGER.warning("One or more entities not available")
             return
 
@@ -154,7 +150,6 @@ async def async_setup_entry(
         start = _bucket_start(now - timedelta(hours=interval_hours))
 
         prod_history = await _get_history(hass, start, now, production_entity)
-        conso_history = await _get_history(hass, start, now, consumption_entity)
         grid_history = await _get_history(hass, start, now, grid_entity)
         add_bat_history = await _get_history(hass, start, now, add_battery_entity)
         out_bat_history = await _get_history(hass, start, now, out_battery_entity)
@@ -168,9 +163,6 @@ async def async_setup_entry(
             "production_entity": production_entity,
             "production_unit": prod_state.attributes.get("unit_of_measurement", ""),
             "production_history": prod_history,
-            "consumption_entity": consumption_entity,
-            "consumption_unit": conso_state.attributes.get("unit_of_measurement", ""),
-            "consumption_history": conso_history,
             "import_unit": grid_unit,
             "import_history": import_history,
             "export_unit": grid_unit,
@@ -188,9 +180,8 @@ async def async_setup_entry(
                 ) as resp:
                     if resp.status == 200:
                         _LOGGER.debug(
-                            "History sent: %d prod, %d conso, %d grid, %d addBat, %d outBat points",
+                            "History sent: %d prod, %d grid, %d addBat, %d outBat points",
                             len(prod_history),
-                            len(conso_history),
                             len(grid_history),
                             len(add_bat_history),
                             len(out_bat_history),
