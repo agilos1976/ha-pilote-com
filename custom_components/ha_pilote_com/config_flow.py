@@ -64,10 +64,8 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for HA Pilote Com."""
 
     VERSION = 1
-
-    def __init__(self) -> None:
-        self._user_input: dict | None = None
-        self._is_reconfigure: bool = False
+    _user_input: dict | None = None
+    _is_reconfigure: bool = False
 
     def _format_state(self, entity_id: str) -> str:
         state = self.hass.states.get(entity_id)
