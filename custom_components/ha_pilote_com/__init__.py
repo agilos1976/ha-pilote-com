@@ -123,20 +123,27 @@ async def async_setup_entry(
         now = dt_util.utcnow()
         start = _bucket_start(now - timedelta(hours=interval_hours))
 
-        history = await get_instance(hass).async_add_executor_job(
+        prod_states = await get_instance(hass).async_add_executor_job(
             state_changes_during_period,
             hass,
             start,
             now,
-            None,
-            [production_entity, consumption_entity],
+            production_entity,
+        )
+
+        conso_states = await get_instance(hass).async_add_executor_job(
+            state_changes_during_period,
+            hass,
+            start,
+            now,
+            consumption_entity,
         )
 
         prod_history = _aggregate_15min(
-            history.get(production_entity, []), start, now
+            prod_states.get(production_entity, []), start, now
         )
         conso_history = _aggregate_15min(
-            history.get(consumption_entity, []), start, now
+            conso_states.get(consumption_entity, []), start, now
         )
 
         payload = {
