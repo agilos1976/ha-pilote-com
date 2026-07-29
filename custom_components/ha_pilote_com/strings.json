@@ -21,10 +21,12 @@
       },
       "verify": {
         "title": "Vérification des valeurs",
-        "description": "Valeurs actuelles des entités sélectionnées :\n\n**Production** : {production_entity}\nValeur actuelle : **{production_value}**\n\n**Réseau** : {grid_entity}\nValeur actuelle : **{grid_value}**\n\n**Batterie** : {battery_entity}\nValeur actuelle : **{battery_value}**",
-        "menu_options": {
-          "save": "Confirmer et enregistrer",
+        "description": "Valeurs actuelles des entités sélectionnées :\n\nProduction : {production_entity}\nValeur actuelle : {production_value}\n\nRéseau : {grid_entity}\nValeur actuelle : {grid_value}\n\nBatterie : {battery_entity}\nValeur actuelle : {battery_value}",
+        "data": {
           "modify": "Modifier la sélection"
+        },
+        "data_description": {
+          "modify": "Cochez pour revenir à la sélection des entités"
         }
       },
       "reconfigure": {

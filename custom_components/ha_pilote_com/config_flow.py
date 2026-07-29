@@ -4,6 +4,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -60,6 +61,13 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
     )
 
 
+VERIFY_SCHEMA = vol.Schema(
+    {
+        vol.Optional("modify", default=False): BooleanSelector(),
+    }
+)
+
+
 class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for HA Pilote Com."""
 
@@ -90,9 +98,9 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._user_input = user_input
             self._is_reconfigure = False
-            return self.async_show_menu(
+            return self.async_show_form(
                 step_id="verify",
-                menu_options=["save", "modify"],
+                data_schema=VERIFY_SCHEMA,
                 description_placeholders=self._verify_placeholders(),
             )
 
@@ -101,32 +109,36 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=_user_schema(self._user_input),
         )
 
-    async def async_step_save(
+    async def async_step_verify(
         self, user_input: dict | None = None
     ) -> ConfigFlowResult:
-        if self._is_reconfigure:
-            return self.async_update_reload_and_abort(
-                self._get_reconfigure_entry(),
+        if user_input is not None:
+            if user_input.get("modify", False):
+                if self._is_reconfigure:
+                    return self.async_show_form(
+                        step_id="reconfigure",
+                        data_schema=_user_schema(self._user_input),
+                    )
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=_user_schema(self._user_input),
+                )
+            if self._is_reconfigure:
+                return self.async_update_reload_and_abort(
+                    self._get_reconfigure_entry(),
+                    data=self._user_input,
+                )
+            await self.async_set_unique_id(self._user_input[CONF_API_KEY])
+            self._abort_if_unique_id_configured()
+            return self.async_create_entry(
+                title="HA Pilote Com",
                 data=self._user_input,
             )
-        await self.async_set_unique_id(self._user_input[CONF_API_KEY])
-        self._abort_if_unique_id_configured()
-        return self.async_create_entry(
-            title="HA Pilote Com",
-            data=self._user_input,
-        )
 
-    async def async_step_modify(
-        self, user_input: dict | None = None
-    ) -> ConfigFlowResult:
-        if self._is_reconfigure:
-            return self.async_show_form(
-                step_id="reconfigure",
-                data_schema=_user_schema(self._user_input),
-            )
         return self.async_show_form(
-            step_id="user",
-            data_schema=_user_schema(self._user_input),
+            step_id="verify",
+            data_schema=VERIFY_SCHEMA,
+            description_placeholders=self._verify_placeholders(),
         )
 
     async def async_step_reconfigure(
@@ -135,9 +147,9 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._user_input = user_input
             self._is_reconfigure = True
-            return self.async_show_menu(
+            return self.async_show_form(
                 step_id="verify",
-                menu_options=["save", "modify"],
+                data_schema=VERIFY_SCHEMA,
                 description_placeholders=self._verify_placeholders(),
             )
 
