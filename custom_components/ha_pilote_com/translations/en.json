@@ -8,6 +8,8 @@
           "production_entity": "Production entity",
           "consumption_entity": "Consumption entity",
           "grid_entity": "Grid entity (import/export)",
+          "add_battery_entity": "Battery charge entity (Add Battery)",
+          "out_battery_entity": "Battery discharge entity (Out Battery)",
           "update_interval": "Update interval",
           "api_key": "API key"
         },
@@ -15,6 +17,8 @@
           "production_entity": "Production load curve sensor (e.g. PV power)",
           "consumption_entity": "Consumption load curve sensor",
           "grid_entity": "Grid power sensor (positive = import, negative = export)",
+          "add_battery_entity": "Battery charging power sensor",
+          "out_battery_entity": "Battery discharging power sensor",
           "update_interval": "Data sending frequency in hours",
           "api_key": "Your Romande Dynamics API key"
         }
@@ -26,6 +30,8 @@
           "production_entity": "Production entity",
           "consumption_entity": "Consumption entity",
           "grid_entity": "Grid entity (import/export)",
+          "add_battery_entity": "Battery charge entity (Add Battery)",
+          "out_battery_entity": "Battery discharge entity (Out Battery)",
           "update_interval": "Update interval",
           "api_key": "API key"
         },
@@ -33,6 +39,8 @@
           "production_entity": "Production load curve sensor (e.g. PV power)",
           "consumption_entity": "Consumption load curve sensor",
           "grid_entity": "Grid power sensor (positive = import, negative = export)",
+          "add_battery_entity": "Battery charging power sensor",
+          "out_battery_entity": "Battery discharging power sensor",
           "update_interval": "Data sending frequency in hours",
           "api_key": "Your Romande Dynamics API key"
         }

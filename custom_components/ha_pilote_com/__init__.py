@@ -14,9 +14,11 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     API_URL,
+    CONF_ADD_BATTERY_ENTITY,
     CONF_API_KEY,
     CONF_CONSUMPTION_ENTITY,
     CONF_GRID_ENTITY,
+    CONF_OUT_BATTERY_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
@@ -132,6 +134,8 @@ async def async_setup_entry(
     production_entity = entry.data[CONF_PRODUCTION_ENTITY]
     consumption_entity = entry.data[CONF_CONSUMPTION_ENTITY]
     grid_entity = entry.data[CONF_GRID_ENTITY]
+    add_battery_entity = entry.data[CONF_ADD_BATTERY_ENTITY]
+    out_battery_entity = entry.data[CONF_OUT_BATTERY_ENTITY]
     interval_hours = int(entry.data[CONF_UPDATE_INTERVAL])
     api_key = entry.data[CONF_API_KEY]
 
@@ -139,8 +143,10 @@ async def async_setup_entry(
         prod_state = hass.states.get(production_entity)
         conso_state = hass.states.get(consumption_entity)
         grid_state = hass.states.get(grid_entity)
+        add_bat_state = hass.states.get(add_battery_entity)
+        out_bat_state = hass.states.get(out_battery_entity)
 
-        if not all([prod_state, conso_state, grid_state]):
+        if not all([prod_state, conso_state, grid_state, add_bat_state, out_bat_state]):
             _LOGGER.warning("One or more entities not available")
             return
 
@@ -150,6 +156,8 @@ async def async_setup_entry(
         prod_history = await _get_history(hass, start, now, production_entity)
         conso_history = await _get_history(hass, start, now, consumption_entity)
         grid_history = await _get_history(hass, start, now, grid_entity)
+        add_bat_history = await _get_history(hass, start, now, add_battery_entity)
+        out_bat_history = await _get_history(hass, start, now, out_battery_entity)
 
         import_history, export_history = _split_grid(grid_history)
 
@@ -167,6 +175,10 @@ async def async_setup_entry(
             "import_history": import_history,
             "export_unit": grid_unit,
             "export_history": export_history,
+            "add_battery_unit": add_bat_state.attributes.get("unit_of_measurement", ""),
+            "add_battery_history": add_bat_history,
+            "out_battery_unit": out_bat_state.attributes.get("unit_of_measurement", ""),
+            "out_battery_history": out_bat_history,
         }
 
         try:
@@ -176,10 +188,12 @@ async def async_setup_entry(
                 ) as resp:
                     if resp.status == 200:
                         _LOGGER.debug(
-                            "History sent: %d prod, %d conso, %d grid points",
+                            "History sent: %d prod, %d conso, %d grid, %d addBat, %d outBat points",
                             len(prod_history),
                             len(conso_history),
                             len(grid_history),
+                            len(add_bat_history),
+                            len(out_bat_history),
                         )
                     else:
                         body = await resp.text()

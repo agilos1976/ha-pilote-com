@@ -8,6 +8,8 @@
           "production_entity": "Entité de production",
           "consumption_entity": "Entité de consommation",
           "grid_entity": "Entité réseau (import/export)",
+          "add_battery_entity": "Entité charge batterie (Add Battery)",
+          "out_battery_entity": "Entité décharge batterie (Out Battery)",
           "update_interval": "Intervalle de mise à jour",
           "api_key": "Clé API"
         },
@@ -15,6 +17,8 @@
           "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
           "consumption_entity": "Capteur de la courbe de charge de consommation",
           "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
+          "add_battery_entity": "Capteur de puissance de charge de la batterie",
+          "out_battery_entity": "Capteur de puissance de décharge de la batterie",
           "update_interval": "Fréquence d'envoi des données en heures",
           "api_key": "Votre clé API Romande Dynamics"
         }
@@ -26,6 +30,8 @@
           "production_entity": "Entité de production",
           "consumption_entity": "Entité de consommation",
           "grid_entity": "Entité réseau (import/export)",
+          "add_battery_entity": "Entité charge batterie (Add Battery)",
+          "out_battery_entity": "Entité décharge batterie (Out Battery)",
           "update_interval": "Intervalle de mise à jour",
           "api_key": "Clé API"
         },
@@ -33,6 +39,8 @@
           "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
           "consumption_entity": "Capteur de la courbe de charge de consommation",
           "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
+          "add_battery_entity": "Capteur de puissance de charge de la batterie",
+          "out_battery_entity": "Capteur de puissance de décharge de la batterie",
           "update_interval": "Fréquence d'envoi des données en heures",
           "api_key": "Votre clé API Romande Dynamics"
         }
