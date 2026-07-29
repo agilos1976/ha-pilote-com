@@ -23,11 +23,19 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+BUCKET_MINUTES = 15
+
 type HaPiloteComConfigEntry = ConfigEntry
 
 
-def _states_to_history(states: list) -> list[dict]:
-    history = []
+def _bucket_start(dt: datetime) -> datetime:
+    """Arrondir au début du quart d'heure."""
+    return dt.replace(minute=(dt.minute // BUCKET_MINUTES) * BUCKET_MINUTES, second=0, microsecond=0)
+
+
+def _aggregate_15min(states: list, period_start: datetime, period_end: datetime) -> list[dict]:
+    """Moyenne pondérée par le temps sur des tranches de 15 min."""
+    samples = []
     for state in states:
         if state.state in ("unavailable", "unknown"):
             continue
@@ -35,11 +43,61 @@ def _states_to_history(states: list) -> list[dict]:
             value = float(state.state)
         except ValueError:
             continue
-        history.append({
-            "timestamp": state.last_updated.isoformat(),
-            "value": value,
-        })
-    return history
+        samples.append((state.last_updated, value))
+
+    if not samples:
+        return []
+
+    samples.sort(key=lambda s: s[0])
+
+    buckets = {}
+    bucket_dt = _bucket_start(period_start)
+    while bucket_dt < period_end:
+        buckets[bucket_dt] = {"weighted_sum": 0.0, "total_seconds": 0.0}
+        bucket_dt += timedelta(minutes=BUCKET_MINUTES)
+
+    for bucket_dt in sorted(buckets.keys()):
+        bucket_end = bucket_dt + timedelta(minutes=BUCKET_MINUTES)
+
+        relevant = []
+        last_before = None
+        for ts, val in samples:
+            if ts < bucket_dt:
+                last_before = val
+            elif ts < bucket_end:
+                relevant.append((ts, val))
+
+        if not relevant and last_before is None:
+            del buckets[bucket_dt]
+            continue
+
+        current_val = last_before if last_before is not None else relevant[0][1]
+        cursor = bucket_dt
+
+        for ts, val in relevant:
+            dt_seconds = (ts - cursor).total_seconds()
+            if dt_seconds > 0:
+                buckets[bucket_dt]["weighted_sum"] += current_val * dt_seconds
+                buckets[bucket_dt]["total_seconds"] += dt_seconds
+            current_val = val
+            cursor = ts
+
+        dt_seconds = (bucket_end - cursor).total_seconds()
+        if dt_seconds > 0:
+            buckets[bucket_dt]["weighted_sum"] += current_val * dt_seconds
+            buckets[bucket_dt]["total_seconds"] += dt_seconds
+
+    result = []
+    for bucket_dt in sorted(buckets.keys()):
+        b = buckets[bucket_dt]
+        if b["total_seconds"] > 0:
+            avg = round(b["weighted_sum"] / b["total_seconds"], 1)
+            result.append({
+                "timestamp": bucket_dt.isoformat(),
+                "value": avg,
+            })
+
+    return result
 
 
 async def async_setup_entry(
@@ -63,7 +121,7 @@ async def async_setup_entry(
             return
 
         now = dt_util.utcnow()
-        start = now - timedelta(hours=interval_hours)
+        start = _bucket_start(now - timedelta(hours=interval_hours))
 
         history = await get_instance(hass).async_add_executor_job(
             state_changes_during_period,
@@ -74,8 +132,12 @@ async def async_setup_entry(
             [production_entity, consumption_entity],
         )
 
-        prod_history = _states_to_history(history.get(production_entity, []))
-        conso_history = _states_to_history(history.get(consumption_entity, []))
+        prod_history = _aggregate_15min(
+            history.get(production_entity, []), start, now
+        )
+        conso_history = _aggregate_15min(
+            history.get(consumption_entity, []), start, now
+        )
 
         payload = {
             "api_key": api_key,
