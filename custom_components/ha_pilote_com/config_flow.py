@@ -68,7 +68,7 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
 class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for HA Pilote Com."""
 
-    VERSION = 2
+    VERSION = 1
 
     async def async_step_user(
         self, user_input: dict | None = None
