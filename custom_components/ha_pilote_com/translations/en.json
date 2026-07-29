@@ -7,16 +7,14 @@
         "data": {
           "production_entity": "Production entity",
           "consumption_entity": "Consumption entity",
-          "import_entity": "Grid import entity",
-          "export_entity": "Grid export entity",
+          "grid_entity": "Grid entity (import/export)",
           "update_interval": "Update interval",
           "api_key": "API key"
         },
         "data_description": {
           "production_entity": "Production load curve sensor (e.g. PV power)",
           "consumption_entity": "Consumption load curve sensor",
-          "import_entity": "Power imported from grid sensor",
-          "export_entity": "Power exported to grid sensor",
+          "grid_entity": "Grid power sensor (positive = import, negative = export)",
           "update_interval": "Data sending frequency in hours",
           "api_key": "Your Romande Dynamics API key"
         }
@@ -27,16 +25,14 @@
         "data": {
           "production_entity": "Production entity",
           "consumption_entity": "Consumption entity",
-          "import_entity": "Grid import entity",
-          "export_entity": "Grid export entity",
+          "grid_entity": "Grid entity (import/export)",
           "update_interval": "Update interval",
           "api_key": "API key"
         },
         "data_description": {
           "production_entity": "Production load curve sensor (e.g. PV power)",
           "consumption_entity": "Consumption load curve sensor",
-          "import_entity": "Power imported from grid sensor",
-          "export_entity": "Power exported to grid sensor",
+          "grid_entity": "Grid power sensor (positive = import, negative = export)",
           "update_interval": "Data sending frequency in hours",
           "api_key": "Your Romande Dynamics API key"
         }

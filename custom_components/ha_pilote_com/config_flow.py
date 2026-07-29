@@ -16,8 +16,7 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_API_KEY,
     CONF_CONSUMPTION_ENTITY,
-    CONF_EXPORT_ENTITY,
-    CONF_IMPORT_ENTITY,
+    CONF_GRID_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
@@ -38,12 +37,8 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
                 default=d.get(CONF_CONSUMPTION_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
             vol.Required(
-                CONF_IMPORT_ENTITY,
-                default=d.get(CONF_IMPORT_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-            vol.Required(
-                CONF_EXPORT_ENTITY,
-                default=d.get(CONF_EXPORT_ENTITY),
+                CONF_GRID_ENTITY,
+                default=d.get(CONF_GRID_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
             vol.Required(
                 CONF_UPDATE_INTERVAL,

@@ -16,8 +16,7 @@ from .const import (
     API_URL,
     CONF_API_KEY,
     CONF_CONSUMPTION_ENTITY,
-    CONF_EXPORT_ENTITY,
-    CONF_IMPORT_ENTITY,
+    CONF_GRID_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
@@ -100,6 +99,22 @@ def _aggregate_15min(states: list, period_start: datetime, period_end: datetime)
     return result
 
 
+def _split_grid(grid_history: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Sépare l'historique grid en import (positif) et export (négatif -> abs)."""
+    import_history = []
+    export_history = []
+    for point in grid_history:
+        ts = point["timestamp"]
+        val = point["value"]
+        if val >= 0:
+            import_history.append({"timestamp": ts, "value": val})
+            export_history.append({"timestamp": ts, "value": 0.0})
+        else:
+            import_history.append({"timestamp": ts, "value": 0.0})
+            export_history.append({"timestamp": ts, "value": abs(val)})
+    return import_history, export_history
+
+
 async def _get_history(hass, start, now, entity_id):
     states = await get_instance(hass).async_add_executor_job(
         state_changes_during_period,
@@ -116,18 +131,16 @@ async def async_setup_entry(
 ) -> bool:
     production_entity = entry.data[CONF_PRODUCTION_ENTITY]
     consumption_entity = entry.data[CONF_CONSUMPTION_ENTITY]
-    import_entity = entry.data[CONF_IMPORT_ENTITY]
-    export_entity = entry.data[CONF_EXPORT_ENTITY]
+    grid_entity = entry.data[CONF_GRID_ENTITY]
     interval_hours = int(entry.data[CONF_UPDATE_INTERVAL])
     api_key = entry.data[CONF_API_KEY]
 
     async def _send_data(_now=None):
         prod_state = hass.states.get(production_entity)
         conso_state = hass.states.get(consumption_entity)
-        import_state = hass.states.get(import_entity)
-        export_state = hass.states.get(export_entity)
+        grid_state = hass.states.get(grid_entity)
 
-        if not all([prod_state, conso_state, import_state, export_state]):
+        if not all([prod_state, conso_state, grid_state]):
             _LOGGER.warning("One or more entities not available")
             return
 
@@ -136,8 +149,11 @@ async def async_setup_entry(
 
         prod_history = await _get_history(hass, start, now, production_entity)
         conso_history = await _get_history(hass, start, now, consumption_entity)
-        import_history = await _get_history(hass, start, now, import_entity)
-        export_history = await _get_history(hass, start, now, export_entity)
+        grid_history = await _get_history(hass, start, now, grid_entity)
+
+        import_history, export_history = _split_grid(grid_history)
+
+        grid_unit = grid_state.attributes.get("unit_of_measurement", "")
 
         payload = {
             "api_key": api_key,
@@ -147,11 +163,9 @@ async def async_setup_entry(
             "consumption_entity": consumption_entity,
             "consumption_unit": conso_state.attributes.get("unit_of_measurement", ""),
             "consumption_history": conso_history,
-            "import_entity": import_entity,
-            "import_unit": import_state.attributes.get("unit_of_measurement", ""),
+            "import_unit": grid_unit,
             "import_history": import_history,
-            "export_entity": export_entity,
-            "export_unit": export_state.attributes.get("unit_of_measurement", ""),
+            "export_unit": grid_unit,
             "export_history": export_history,
         }
 
@@ -162,11 +176,10 @@ async def async_setup_entry(
                 ) as resp:
                     if resp.status == 200:
                         _LOGGER.debug(
-                            "History sent: %d prod, %d conso, %d import, %d export points",
+                            "History sent: %d prod, %d conso, %d grid points",
                             len(prod_history),
                             len(conso_history),
-                            len(import_history),
-                            len(export_history),
+                            len(grid_history),
                         )
                     else:
                         body = await resp.text()
