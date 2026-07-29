@@ -2,6 +2,8 @@ DOMAIN = "ha_pilote_com"
 
 CONF_PRODUCTION_ENTITY = "production_entity"
 CONF_CONSUMPTION_ENTITY = "consumption_entity"
+CONF_IMPORT_ENTITY = "import_entity"
+CONF_EXPORT_ENTITY = "export_entity"
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_API_KEY = "api_key"
 

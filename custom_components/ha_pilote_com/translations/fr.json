@@ -7,12 +7,16 @@
         "data": {
           "production_entity": "Entité de production",
           "consumption_entity": "Entité de consommation",
+          "import_entity": "Entité import réseau",
+          "export_entity": "Entité export réseau",
           "update_interval": "Intervalle de mise à jour",
           "api_key": "Clé API"
         },
         "data_description": {
           "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
           "consumption_entity": "Capteur de la courbe de charge de consommation",
+          "import_entity": "Capteur de la puissance importée depuis le réseau",
+          "export_entity": "Capteur de la puissance exportée vers le réseau",
           "update_interval": "Fréquence d'envoi des données en heures",
           "api_key": "Votre clé API Romande Dynamics"
         }
@@ -23,12 +27,16 @@
         "data": {
           "production_entity": "Entité de production",
           "consumption_entity": "Entité de consommation",
+          "import_entity": "Entité import réseau",
+          "export_entity": "Entité export réseau",
           "update_interval": "Intervalle de mise à jour",
           "api_key": "Clé API"
         },
         "data_description": {
           "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
           "consumption_entity": "Capteur de la courbe de charge de consommation",
+          "import_entity": "Capteur de la puissance importée depuis le réseau",
+          "export_entity": "Capteur de la puissance exportée vers le réseau",
           "update_interval": "Fréquence d'envoi des données en heures",
           "api_key": "Votre clé API Romande Dynamics"
         }

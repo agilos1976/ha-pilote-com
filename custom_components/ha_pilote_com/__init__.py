@@ -16,6 +16,8 @@ from .const import (
     API_URL,
     CONF_API_KEY,
     CONF_CONSUMPTION_ENTITY,
+    CONF_EXPORT_ENTITY,
+    CONF_IMPORT_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
@@ -29,12 +31,10 @@ type HaPiloteComConfigEntry = ConfigEntry
 
 
 def _bucket_start(dt: datetime) -> datetime:
-    """Arrondir au début du quart d'heure."""
     return dt.replace(minute=(dt.minute // BUCKET_MINUTES) * BUCKET_MINUTES, second=0, microsecond=0)
 
 
 def _aggregate_15min(states: list, period_start: datetime, period_end: datetime) -> list[dict]:
-    """Moyenne pondérée par le temps sur des tranches de 15 min."""
     samples = []
     for state in states:
         if state.state in ("unavailable", "unknown"):
@@ -100,51 +100,44 @@ def _aggregate_15min(states: list, period_start: datetime, period_end: datetime)
     return result
 
 
+async def _get_history(hass, start, now, entity_id):
+    states = await get_instance(hass).async_add_executor_job(
+        state_changes_during_period,
+        hass,
+        start,
+        now,
+        entity_id,
+    )
+    return _aggregate_15min(states.get(entity_id, []), start, now)
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: HaPiloteComConfigEntry
 ) -> bool:
     production_entity = entry.data[CONF_PRODUCTION_ENTITY]
     consumption_entity = entry.data[CONF_CONSUMPTION_ENTITY]
+    import_entity = entry.data[CONF_IMPORT_ENTITY]
+    export_entity = entry.data[CONF_EXPORT_ENTITY]
     interval_hours = int(entry.data[CONF_UPDATE_INTERVAL])
     api_key = entry.data[CONF_API_KEY]
 
     async def _send_data(_now=None):
         prod_state = hass.states.get(production_entity)
         conso_state = hass.states.get(consumption_entity)
+        import_state = hass.states.get(import_entity)
+        export_state = hass.states.get(export_entity)
 
-        if prod_state is None or conso_state is None:
-            _LOGGER.warning(
-                "Entity not available: production=%s, consumption=%s",
-                prod_state,
-                conso_state,
-            )
+        if not all([prod_state, conso_state, import_state, export_state]):
+            _LOGGER.warning("One or more entities not available")
             return
 
         now = dt_util.utcnow()
         start = _bucket_start(now - timedelta(hours=interval_hours))
 
-        prod_states = await get_instance(hass).async_add_executor_job(
-            state_changes_during_period,
-            hass,
-            start,
-            now,
-            production_entity,
-        )
-
-        conso_states = await get_instance(hass).async_add_executor_job(
-            state_changes_during_period,
-            hass,
-            start,
-            now,
-            consumption_entity,
-        )
-
-        prod_history = _aggregate_15min(
-            prod_states.get(production_entity, []), start, now
-        )
-        conso_history = _aggregate_15min(
-            conso_states.get(consumption_entity, []), start, now
-        )
+        prod_history = await _get_history(hass, start, now, production_entity)
+        conso_history = await _get_history(hass, start, now, consumption_entity)
+        import_history = await _get_history(hass, start, now, import_entity)
+        export_history = await _get_history(hass, start, now, export_entity)
 
         payload = {
             "api_key": api_key,
@@ -154,6 +147,12 @@ async def async_setup_entry(
             "consumption_entity": consumption_entity,
             "consumption_unit": conso_state.attributes.get("unit_of_measurement", ""),
             "consumption_history": conso_history,
+            "import_entity": import_entity,
+            "import_unit": import_state.attributes.get("unit_of_measurement", ""),
+            "import_history": import_history,
+            "export_entity": export_entity,
+            "export_unit": export_state.attributes.get("unit_of_measurement", ""),
+            "export_history": export_history,
         }
 
         try:
@@ -163,9 +162,11 @@ async def async_setup_entry(
                 ) as resp:
                     if resp.status == 200:
                         _LOGGER.debug(
-                            "History sent: %d prod, %d conso points",
+                            "History sent: %d prod, %d conso, %d import, %d export points",
                             len(prod_history),
                             len(conso_history),
+                            len(import_history),
+                            len(export_history),
                         )
                     else:
                         body = await resp.text()

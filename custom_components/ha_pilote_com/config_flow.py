@@ -16,6 +16,8 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_API_KEY,
     CONF_CONSUMPTION_ENTITY,
+    CONF_EXPORT_ENTITY,
+    CONF_IMPORT_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
@@ -23,10 +25,50 @@ from .const import (
 )
 
 
+def _user_schema(defaults: dict | None = None) -> vol.Schema:
+    d = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_PRODUCTION_ENTITY,
+                default=d.get(CONF_PRODUCTION_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            vol.Required(
+                CONF_CONSUMPTION_ENTITY,
+                default=d.get(CONF_CONSUMPTION_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            vol.Required(
+                CONF_IMPORT_ENTITY,
+                default=d.get(CONF_IMPORT_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            vol.Required(
+                CONF_EXPORT_ENTITY,
+                default=d.get(CONF_EXPORT_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            vol.Required(
+                CONF_UPDATE_INTERVAL,
+                default=d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=1,
+                    max=24,
+                    step=1,
+                    mode=NumberSelectorMode.BOX,
+                    unit_of_measurement="h",
+                ),
+            ),
+            vol.Required(
+                CONF_API_KEY,
+                default=d.get(CONF_API_KEY),
+            ): TextSelector(TextSelectorConfig(type="password")),
+        }
+    )
+
+
 class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for HA Pilote Com."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict | None = None
@@ -41,30 +83,7 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_PRODUCTION_ENTITY): EntitySelector(
-                        EntitySelectorConfig(domain="sensor"),
-                    ),
-                    vol.Required(CONF_CONSUMPTION_ENTITY): EntitySelector(
-                        EntitySelectorConfig(domain="sensor"),
-                    ),
-                    vol.Required(
-                        CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
-                    ): NumberSelector(
-                        NumberSelectorConfig(
-                            min=1,
-                            max=24,
-                            step=1,
-                            mode=NumberSelectorMode.BOX,
-                            unit_of_measurement="h",
-                        ),
-                    ),
-                    vol.Required(CONF_API_KEY): TextSelector(
-                        TextSelectorConfig(type="password"),
-                    ),
-                }
-            ),
+            data_schema=_user_schema(),
         )
 
     async def async_step_reconfigure(
@@ -76,43 +95,7 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
                 data=user_input,
             )
 
-        entry = self._get_reconfigure_entry()
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_PRODUCTION_ENTITY,
-                        default=entry.data.get(CONF_PRODUCTION_ENTITY),
-                    ): EntitySelector(
-                        EntitySelectorConfig(domain="sensor"),
-                    ),
-                    vol.Required(
-                        CONF_CONSUMPTION_ENTITY,
-                        default=entry.data.get(CONF_CONSUMPTION_ENTITY),
-                    ): EntitySelector(
-                        EntitySelectorConfig(domain="sensor"),
-                    ),
-                    vol.Required(
-                        CONF_UPDATE_INTERVAL,
-                        default=entry.data.get(
-                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-                        ),
-                    ): NumberSelector(
-                        NumberSelectorConfig(
-                            min=1,
-                            max=24,
-                            step=1,
-                            mode=NumberSelectorMode.BOX,
-                            unit_of_measurement="h",
-                        ),
-                    ),
-                    vol.Required(
-                        CONF_API_KEY,
-                        default=entry.data.get(CONF_API_KEY),
-                    ): TextSelector(
-                        TextSelectorConfig(type="password"),
-                    ),
-                }
-            ),
+            data_schema=_user_schema(dict(self._get_reconfigure_entry().data)),
         )
