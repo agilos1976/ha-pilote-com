@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.history import state_changes_during_period
+from homeassistant.util import dt as dt_util
 
 from .const import (
     API_URL,
@@ -21,6 +24,22 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 type HaPiloteComConfigEntry = ConfigEntry
+
+
+def _states_to_history(states: list) -> list[dict]:
+    history = []
+    for state in states:
+        if state.state in ("unavailable", "unknown"):
+            continue
+        try:
+            value = float(state.state)
+        except ValueError:
+            continue
+        history.append({
+            "timestamp": state.last_updated.isoformat(),
+            "value": value,
+        })
+    return history
 
 
 async def async_setup_entry(
@@ -43,23 +62,42 @@ async def async_setup_entry(
             )
             return
 
+        now = dt_util.utcnow()
+        start = now - timedelta(hours=interval_hours)
+
+        history = await get_instance(hass).async_add_executor_job(
+            state_changes_during_period,
+            hass,
+            start,
+            now,
+            None,
+            [production_entity, consumption_entity],
+        )
+
+        prod_history = _states_to_history(history.get(production_entity, []))
+        conso_history = _states_to_history(history.get(consumption_entity, []))
+
         payload = {
             "api_key": api_key,
-            "production": prod_state.state,
-            "production_unit": prod_state.attributes.get("unit_of_measurement", ""),
             "production_entity": production_entity,
-            "consumption": conso_state.state,
-            "consumption_unit": conso_state.attributes.get("unit_of_measurement", ""),
+            "production_unit": prod_state.attributes.get("unit_of_measurement", ""),
+            "production_history": prod_history,
             "consumption_entity": consumption_entity,
+            "consumption_unit": conso_state.attributes.get("unit_of_measurement", ""),
+            "consumption_history": conso_history,
         }
 
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    API_URL, json=payload, timeout=aiohttp.ClientTimeout(total=30)
+                    API_URL, json=payload, timeout=aiohttp.ClientTimeout(total=60)
                 ) as resp:
                     if resp.status == 200:
-                        _LOGGER.debug("Data sent successfully to HA Pilote Com")
+                        _LOGGER.debug(
+                            "History sent: %d prod, %d conso points",
+                            len(prod_history),
+                            len(conso_history),
+                        )
                     else:
                         body = await resp.text()
                         _LOGGER.error("API error %s: %s", resp.status, body)
