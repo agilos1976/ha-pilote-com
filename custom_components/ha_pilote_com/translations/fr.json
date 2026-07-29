@@ -21,6 +21,14 @@
           "api_key": "Votre clé API Romande Dynamics"
         }
       },
+      "verify": {
+        "title": "Vérification des valeurs",
+        "description": "Valeurs actuelles des entités sélectionnées :\n\n**Production** : {production_entity}\nValeur actuelle : **{production_value}**\n\n**Réseau** : {grid_entity}\nValeur actuelle : **{grid_value}**\n\n**Charge batterie** : {add_battery_entity}\nValeur actuelle : **{add_battery_value}**\n\n**Décharge batterie** : {out_battery_entity}\nValeur actuelle : **{out_battery_value}**",
+        "menu_options": {
+          "save": "Confirmer et enregistrer",
+          "modify": "Modifier la sélection"
+        }
+      },
       "reconfigure": {
         "title": "Reconfigurer HA Pilote Com",
         "description": "Modifiez les paramètres de votre intégration.",
