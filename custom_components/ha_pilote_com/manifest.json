@@ -3,9 +3,9 @@
   "name": "HA Pilote Com",
   "codeowners": ["@marccarrard"],
   "config_flow": true,
-  "documentation": "https://github.com/marccarrard/ha-pilote-com",
+  "documentation": "https://github.com/agilos1976/ha-pilote-com",
   "iot_class": "cloud_push",
-  "issue_tracker": "https://github.com/marccarrard/ha-pilote-com/issues",
+  "issue_tracker": "https://github.com/agilos1976/ha-pilote-com/issues",
   "requirements": ["aiohttp>=3.8.0"],
-  "version": "1.0.0"
+  "version": "1.1.0"
 }
