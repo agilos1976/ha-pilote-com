@@ -9,24 +9,18 @@
           "grid_entity": "Entité réseau (import/export)",
           "battery_entity": "Entité batterie (charge/décharge)",
           "update_interval": "Intervalle de mise à jour",
-          "api_key": "Clé API"
+          "api_key": "Clé API",
+          "ha_url": "URL Home Assistant (optionnel)",
+          "ha_token": "Token Home Assistant (optionnel)"
         },
         "data_description": {
           "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
           "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
           "battery_entity": "Capteur de puissance batterie (positif = charge, négatif = décharge)",
           "update_interval": "Fréquence d'envoi des données en heures",
-          "api_key": "Votre clé API Romande Dynamics"
-        }
-      },
-      "verify": {
-        "title": "Vérification des valeurs",
-        "description": "Valeurs actuelles des entités sélectionnées :\n\nProduction : {production_entity}\nValeur actuelle : {production_value}\n\nRéseau : {grid_entity}\nValeur actuelle : {grid_value}\n\nBatterie : {battery_entity}\nValeur actuelle : {battery_value}",
-        "data": {
-          "modify": "Modifier la sélection"
-        },
-        "data_description": {
-          "modify": "Cochez pour revenir à la sélection des entités"
+          "api_key": "Votre clé API Romande Dynamics",
+          "ha_url": "URL externe de votre Home Assistant (ex: https://mon-ha.duckdns.org)",
+          "ha_token": "Token d'accès longue durée pour l'API Home Assistant"
         }
       },
       "reconfigure": {
@@ -37,14 +31,18 @@
           "grid_entity": "Entité réseau (import/export)",
           "battery_entity": "Entité batterie (charge/décharge)",
           "update_interval": "Intervalle de mise à jour",
-          "api_key": "Clé API"
+          "api_key": "Clé API",
+          "ha_url": "URL Home Assistant (optionnel)",
+          "ha_token": "Token Home Assistant (optionnel)"
         },
         "data_description": {
           "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
           "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
           "battery_entity": "Capteur de puissance batterie (positif = charge, négatif = décharge)",
           "update_interval": "Fréquence d'envoi des données en heures",
-          "api_key": "Votre clé API Romande Dynamics"
+          "api_key": "Votre clé API Romande Dynamics",
+          "ha_url": "URL externe de votre Home Assistant (ex: https://mon-ha.duckdns.org)",
+          "ha_token": "Token d'accès longue durée pour l'API Home Assistant"
         }
       }
     },

@@ -17,6 +17,8 @@ from .const import (
     CONF_API_KEY,
     CONF_BATTERY_ENTITY,
     CONF_GRID_ENTITY,
+    CONF_HA_TOKEN,
+    CONF_HA_URL,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
@@ -55,6 +57,14 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
             vol.Required(
                 CONF_API_KEY,
                 default=d.get(CONF_API_KEY),
+            ): TextSelector(TextSelectorConfig(type="password")),
+            vol.Optional(
+                CONF_HA_URL,
+                default=d.get(CONF_HA_URL, ""),
+            ): TextSelector(TextSelectorConfig(type="url")),
+            vol.Optional(
+                CONF_HA_TOKEN,
+                default=d.get(CONF_HA_TOKEN, ""),
             ): TextSelector(TextSelectorConfig(type="password")),
         }
     )

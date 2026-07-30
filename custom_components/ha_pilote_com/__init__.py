@@ -17,6 +17,8 @@ from .const import (
     CONF_API_KEY,
     CONF_BATTERY_ENTITY,
     CONF_GRID_ENTITY,
+    CONF_HA_TOKEN,
+    CONF_HA_URL,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
@@ -192,6 +194,12 @@ async def async_setup_entry(
         except aiohttp.ClientError as err:
             _LOGGER.error("Failed to send data: %s", err)
 
+    ha_url = entry.data.get(CONF_HA_URL, "")
+    ha_token = entry.data.get(CONF_HA_TOKEN, "")
+
+    latitude = hass.config.latitude
+    longitude = hass.config.longitude
+
     async def _send_live(_now=None):
         entities = {}
         for entity_id in LIVE_ENTITIES:
@@ -202,6 +210,10 @@ async def async_setup_entry(
         payload = {
             "api_key": api_key,
             "entities": entities,
+            "ha_url": ha_url,
+            "ha_token": ha_token,
+            "latitude": latitude,
+            "longitude": longitude,
         }
 
         try:

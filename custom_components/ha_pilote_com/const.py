@@ -5,6 +5,8 @@ CONF_GRID_ENTITY = "grid_entity"
 CONF_BATTERY_ENTITY = "battery_entity"
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_API_KEY = "api_key"
+CONF_HA_URL = "ha_url"
+CONF_HA_TOKEN = "ha_token"
 
 DEFAULT_UPDATE_INTERVAL = 1
 
