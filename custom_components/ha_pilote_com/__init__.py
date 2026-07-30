@@ -20,6 +20,9 @@ from .const import (
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
+    LIVE_API_URL,
+    LIVE_ENTITIES,
+    LIVE_INTERVAL_SECONDS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -189,13 +192,42 @@ async def async_setup_entry(
         except aiohttp.ClientError as err:
             _LOGGER.error("Failed to send data: %s", err)
 
-    unsub = async_track_time_interval(
+    async def _send_live(_now=None):
+        entities = {}
+        for entity_id in LIVE_ENTITIES:
+            state = hass.states.get(entity_id)
+            if state is not None:
+                entities[entity_id] = str(state.state)
+
+        payload = {
+            "api_key": api_key,
+            "entities": entities,
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    LIVE_API_URL, json=payload, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status != 200:
+                        _LOGGER.warning("Live API error %s", resp.status)
+        except aiohttp.ClientError:
+            pass
+
+    unsub_history = async_track_time_interval(
         hass,
         _send_data,
         timedelta(hours=interval_hours),
     )
 
-    entry.async_on_unload(unsub)
+    unsub_live = async_track_time_interval(
+        hass,
+        _send_live,
+        timedelta(seconds=LIVE_INTERVAL_SECONDS),
+    )
+
+    entry.async_on_unload(unsub_history)
+    entry.async_on_unload(unsub_live)
 
     await _send_data()
 

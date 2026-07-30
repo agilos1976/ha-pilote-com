@@ -9,3 +9,21 @@ CONF_API_KEY = "api_key"
 DEFAULT_UPDATE_INTERVAL = 1
 
 API_URL = "http://carrard.ch/RomandeDynamics/api/post_data_user.php"
+
+LIVE_API_URL = "https://carrard.ch/pilote/api/post_live.php"
+LIVE_INTERVAL_SECONDS = 3
+LIVE_ENTITIES = [
+    "sensor.batteries_puissance_reelle",
+    "sensor.shellypro3em_8c4f00c53adc_total_active_power",
+    "sensor.energie_restante_bat",
+    "sensor.batteries_soc",
+    "sensor.production_energie_maison",
+    "sensor.audi_q4_sportback_e_tron_primary_engine_percent",
+    "binary_sensor.audi_q4_sportback_e_tron_plug_state",
+    "sensor.audi_a6_avant_e_tron_primary_engine_percent",
+    "binary_sensor.audi_a6_avant_e_tron_plug_state",
+    "sensor.charger_status_connector_2",
+    "number.charger_maximum_current",
+    "sensor.charger_energy_session_2",
+    "input_select.mode_batteries",
+]
