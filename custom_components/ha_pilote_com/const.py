@@ -11,7 +11,7 @@ CONF_HA_TOKEN = "ha_token"
 
 DEFAULT_UPDATE_INTERVAL = 1
 
-API_URL = "http://carrard.ch/RomandeDynamics/api/post_data_user.php"
+API_URL = "https://carrard.ch/pilote/api/post_data_user.php"
 
 LIVE_API_URL = "https://carrard.ch/pilote/api/post_live.php"
 LIVE_INTERVAL_SECONDS = 3
