@@ -16,6 +16,7 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_API_KEY,
     CONF_BATTERY_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
     CONF_GRID_ENTITY,
     CONF_HA_TOKEN,
     CONF_HA_URL,
@@ -42,6 +43,10 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
                 CONF_BATTERY_ENTITY,
                 default=d.get(CONF_BATTERY_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
+            vol.Required(
+                CONF_BATTERY_SOC_ENTITY,
+                default=d.get(CONF_BATTERY_SOC_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="battery")),
             vol.Required(
                 CONF_UPDATE_INTERVAL,
                 default=d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),

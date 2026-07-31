@@ -16,6 +16,7 @@ from .const import (
     API_URL,
     CONF_API_KEY,
     CONF_BATTERY_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
     CONF_GRID_ENTITY,
     CONF_HA_TOKEN,
     CONF_HA_URL,
@@ -136,6 +137,7 @@ async def async_setup_entry(
     production_entity = entry.data[CONF_PRODUCTION_ENTITY]
     grid_entity = entry.data[CONF_GRID_ENTITY]
     battery_entity = entry.data[CONF_BATTERY_ENTITY]
+    battery_soc_entity = entry.data[CONF_BATTERY_SOC_ENTITY]
     interval_hours = int(entry.data[CONF_UPDATE_INTERVAL])
     api_key = entry.data[CONF_API_KEY]
 
@@ -207,9 +209,13 @@ async def async_setup_entry(
             if state is not None:
                 entities[entity_id] = str(state.state)
 
+        soc_state = hass.states.get(battery_soc_entity)
+        battery_soc = str(soc_state.state) if soc_state else ""
+
         payload = {
             "api_key": api_key,
             "entities": entities,
+            "battery_soc": battery_soc,
             "ha_url": ha_url,
             "ha_token": ha_token,
             "latitude": latitude,
