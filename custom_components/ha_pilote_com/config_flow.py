@@ -18,14 +18,14 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
-    CONF_ADD_BATTERY_ENTITY,
     CONF_API_KEY,
+    CONF_BATTERY_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
-    CONF_CONSUMPTION_ENTITY,
     CONF_GRID_ENTITY,
-    CONF_OUT_BATTERY_ENTITY,
+    CONF_HA_TOKEN,
+    CONF_HA_URL,
     CONF_PRODUCTION_ENTITY,
-    CONF_SOC_ENTITY,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
@@ -39,27 +39,19 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
             vol.Required(
                 CONF_PRODUCTION_ENTITY,
                 default=d.get(CONF_PRODUCTION_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
-            vol.Required(
-                CONF_CONSUMPTION_ENTITY,
-                default=d.get(CONF_CONSUMPTION_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
             vol.Required(
                 CONF_GRID_ENTITY,
                 default=d.get(CONF_GRID_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
             vol.Required(
-                CONF_ADD_BATTERY_ENTITY,
-                default=d.get(CONF_ADD_BATTERY_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+                CONF_BATTERY_ENTITY,
+                default=d.get(CONF_BATTERY_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
             vol.Required(
-                CONF_OUT_BATTERY_ENTITY,
-                default=d.get(CONF_OUT_BATTERY_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
-            vol.Optional(
-                CONF_SOC_ENTITY,
-                default=d.get(CONF_SOC_ENTITY, ""),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+                CONF_BATTERY_SOC_ENTITY,
+                default=d.get(CONF_BATTERY_SOC_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="battery")),
             vol.Required(
                 CONF_UPDATE_INTERVAL,
                 default=d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
@@ -75,6 +67,14 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
             vol.Required(
                 CONF_API_KEY,
                 default=d.get(CONF_API_KEY),
+            ): TextSelector(TextSelectorConfig(type="password")),
+            vol.Optional(
+                CONF_HA_URL,
+                default=d.get(CONF_HA_URL, ""),
+            ): TextSelector(TextSelectorConfig(type="url")),
+            vol.Optional(
+                CONF_HA_TOKEN,
+                default=d.get(CONF_HA_TOKEN, ""),
             ): TextSelector(TextSelectorConfig(type="password")),
         }
     )

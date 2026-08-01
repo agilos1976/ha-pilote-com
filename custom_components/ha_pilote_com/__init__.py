@@ -14,16 +14,19 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     API_URL,
-    CONF_ADD_BATTERY_ENTITY,
     CONF_API_KEY,
+    CONF_BATTERY_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
-    CONF_CONSUMPTION_ENTITY,
     CONF_GRID_ENTITY,
-    CONF_OUT_BATTERY_ENTITY,
+    CONF_HA_TOKEN,
+    CONF_HA_URL,
     CONF_PRODUCTION_ENTITY,
-    CONF_SOC_ENTITY,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
+    LIVE_API_URL,
+    LIVE_ENTITIES,
+    LIVE_INTERVAL_SECONDS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -103,20 +106,19 @@ def _aggregate_15min(states: list, period_start: datetime, period_end: datetime)
     return result
 
 
-def _split_grid(grid_history: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Sépare l'historique grid en import (positif) et export (négatif -> abs)."""
-    import_history = []
-    export_history = []
-    for point in grid_history:
+def _split_signed(history: list[dict]) -> tuple[list[dict], list[dict]]:
+    positive = []
+    negative = []
+    for point in history:
         ts = point["timestamp"]
         val = point["value"]
         if val >= 0:
-            import_history.append({"timestamp": ts, "value": val})
-            export_history.append({"timestamp": ts, "value": 0.0})
+            positive.append({"timestamp": ts, "value": val})
+            negative.append({"timestamp": ts, "value": 0.0})
         else:
-            import_history.append({"timestamp": ts, "value": 0.0})
-            export_history.append({"timestamp": ts, "value": abs(val)})
-    return import_history, export_history
+            positive.append({"timestamp": ts, "value": 0.0})
+            negative.append({"timestamp": ts, "value": abs(val)})
+    return positive, negative
 
 
 async def _get_history(hass, start, now, entity_id):
@@ -130,26 +132,26 @@ async def _get_history(hass, start, now, entity_id):
     return _aggregate_15min(states.get(entity_id, []), start, now)
 
 
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: HaPiloteComConfigEntry
 ) -> bool:
     production_entity = entry.data[CONF_PRODUCTION_ENTITY]
-    consumption_entity = entry.data[CONF_CONSUMPTION_ENTITY]
     grid_entity = entry.data[CONF_GRID_ENTITY]
-    add_battery_entity = entry.data[CONF_ADD_BATTERY_ENTITY]
-    out_battery_entity = entry.data[CONF_OUT_BATTERY_ENTITY]
-    soc_entity = entry.data.get(CONF_SOC_ENTITY, "")
+    battery_entity = entry.data[CONF_BATTERY_ENTITY]
+    battery_soc_entity = entry.data[CONF_BATTERY_SOC_ENTITY]
     interval_hours = int(entry.data[CONF_UPDATE_INTERVAL])
     api_key = entry.data[CONF_API_KEY]
 
     async def _send_data(_now=None):
         prod_state = hass.states.get(production_entity)
-        conso_state = hass.states.get(consumption_entity)
         grid_state = hass.states.get(grid_entity)
-        add_bat_state = hass.states.get(add_battery_entity)
-        out_bat_state = hass.states.get(out_battery_entity)
+        bat_state = hass.states.get(battery_entity)
 
-        if not all([prod_state, conso_state, grid_state, add_bat_state, out_bat_state]):
+        if not all([prod_state, grid_state, bat_state]):
             _LOGGER.warning("One or more entities not available")
             return
 
@@ -157,41 +159,32 @@ async def async_setup_entry(
         start = _bucket_start(now - timedelta(hours=interval_hours))
 
         prod_history = await _get_history(hass, start, now, production_entity)
-        conso_history = await _get_history(hass, start, now, consumption_entity)
         grid_history = await _get_history(hass, start, now, grid_entity)
-        add_bat_history = await _get_history(hass, start, now, add_battery_entity)
-        out_bat_history = await _get_history(hass, start, now, out_battery_entity)
+        bat_history = await _get_history(hass, start, now, battery_entity)
+        soc_history = await _get_history(hass, start, now, battery_soc_entity)
 
-        import_history, export_history = _split_grid(grid_history)
+        import_history, export_history = _split_signed(grid_history)
+        add_bat_history, out_bat_history = _split_signed(bat_history)
 
         grid_unit = grid_state.attributes.get("unit_of_measurement", "")
+        bat_unit = bat_state.attributes.get("unit_of_measurement", "")
 
         payload = {
             "api_key": api_key,
             "production_entity": production_entity,
             "production_unit": prod_state.attributes.get("unit_of_measurement", ""),
             "production_history": prod_history,
-            "consumption_entity": consumption_entity,
-            "consumption_unit": conso_state.attributes.get("unit_of_measurement", ""),
-            "consumption_history": conso_history,
             "import_unit": grid_unit,
             "import_history": import_history,
             "export_unit": grid_unit,
             "export_history": export_history,
-            "add_battery_unit": add_bat_state.attributes.get("unit_of_measurement", ""),
+            "add_battery_unit": bat_unit,
             "add_battery_history": add_bat_history,
-            "out_battery_unit": out_bat_state.attributes.get("unit_of_measurement", ""),
+            "out_battery_unit": bat_unit,
             "out_battery_history": out_bat_history,
+            "soc_history": soc_history,
         }
 
-        # SOC batterie (optionnel)
-        if soc_entity:
-            soc_state = hass.states.get(soc_entity)
-            if soc_state:
-                soc_history = await _get_history(hass, start, now, soc_entity)
-                payload["soc_history"] = soc_history
-
-        # Consommateurs personnalisés (depuis options)
         consumers = entry.options.get(CONF_CONSUMERS, [])
         if consumers:
             consumers_data = []
@@ -220,12 +213,10 @@ async def async_setup_entry(
                     if resp.status == 200:
                         n_consumers = len(payload.get("consumers", []))
                         _LOGGER.debug(
-                            "History sent: %d prod, %d conso, %d grid, %d addBat, %d outBat, %d consumers",
+                            "History sent: %d prod, %d grid, %d bat, %d consumers",
                             len(prod_history),
-                            len(conso_history),
                             len(grid_history),
-                            len(add_bat_history),
-                            len(out_bat_history),
+                            len(bat_history),
                             n_consumers,
                         )
                     else:
@@ -234,24 +225,61 @@ async def async_setup_entry(
         except aiohttp.ClientError as err:
             _LOGGER.error("Failed to send data: %s", err)
 
-    unsub = async_track_time_interval(
+    ha_url = entry.data.get(CONF_HA_URL, "")
+    ha_token = entry.data.get(CONF_HA_TOKEN, "")
+
+    latitude = hass.config.latitude
+    longitude = hass.config.longitude
+
+    async def _send_live(_now=None):
+        entities = {}
+        for entity_id in LIVE_ENTITIES:
+            state = hass.states.get(entity_id)
+            if state is not None:
+                entities[entity_id] = str(state.state)
+
+        soc_state = hass.states.get(battery_soc_entity)
+        battery_soc = str(soc_state.state) if soc_state else ""
+
+        payload = {
+            "api_key": api_key,
+            "entities": entities,
+            "battery_soc": battery_soc,
+            "ha_url": ha_url,
+            "ha_token": ha_token,
+            "latitude": latitude,
+            "longitude": longitude,
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    LIVE_API_URL, json=payload, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status != 200:
+                        _LOGGER.warning("Live API error %s", resp.status)
+        except aiohttp.ClientError:
+            pass
+
+    unsub_history = async_track_time_interval(
         hass,
         _send_data,
         timedelta(hours=interval_hours),
     )
 
-    entry.async_on_unload(unsub)
+    unsub_live = async_track_time_interval(
+        hass,
+        _send_live,
+        timedelta(seconds=LIVE_INTERVAL_SECONDS),
+    )
 
-    # Recharger quand les options changent (ajout/suppression consommateur)
+    entry.async_on_unload(unsub_history)
+    entry.async_on_unload(unsub_live)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     await _send_data()
 
     return True
-
-
-async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(
