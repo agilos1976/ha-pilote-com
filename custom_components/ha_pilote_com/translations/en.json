@@ -6,23 +6,23 @@
         "description": "Set up automatic sending of your load curves to Romande Dynamics.",
         "data": {
           "production_entity": "Production entity",
+          "consumption_entity": "Consumption entity",
           "grid_entity": "Grid entity (import/export)",
-          "battery_entity": "Battery entity (charge/discharge)",
-          "battery_soc_entity": "Battery SOC entity (%)",
+          "add_battery_entity": "Battery charge entity",
+          "out_battery_entity": "Battery discharge entity",
+          "soc_entity": "Battery SOC entity (%)",
           "update_interval": "Update interval",
-          "api_key": "API key",
-          "ha_url": "Home Assistant URL (optional)",
-          "ha_token": "Home Assistant Token (optional)"
+          "api_key": "API key"
         },
         "data_description": {
-          "production_entity": "Production load curve sensor (e.g. PV power)",
+          "production_entity": "Production power sensor (e.g. PV power)",
+          "consumption_entity": "Consumption power sensor",
           "grid_entity": "Grid power sensor (positive = import, negative = export)",
-          "battery_entity": "Battery power sensor (positive = charge, negative = discharge)",
-          "battery_soc_entity": "Battery state of charge sensor (percentage)",
+          "add_battery_entity": "Battery charging power sensor",
+          "out_battery_entity": "Battery discharging power sensor",
+          "soc_entity": "Battery state of charge sensor in % (optional)",
           "update_interval": "Data sending frequency in hours",
-          "api_key": "Your Romande Dynamics API key",
-          "ha_url": "External URL of your Home Assistant (e.g. https://my-ha.duckdns.org)",
-          "ha_token": "Long-lived access token for Home Assistant API"
+          "api_key": "Your Romande Dynamics API key"
         }
       },
       "reconfigure": {
@@ -30,28 +30,50 @@
         "description": "Modify your integration settings.",
         "data": {
           "production_entity": "Production entity",
+          "consumption_entity": "Consumption entity",
           "grid_entity": "Grid entity (import/export)",
-          "battery_entity": "Battery entity (charge/discharge)",
-          "battery_soc_entity": "Battery SOC entity (%)",
+          "add_battery_entity": "Battery charge entity",
+          "out_battery_entity": "Battery discharge entity",
+          "soc_entity": "Battery SOC entity (%)",
           "update_interval": "Update interval",
-          "api_key": "API key",
-          "ha_url": "Home Assistant URL (optional)",
-          "ha_token": "Home Assistant Token (optional)"
+          "api_key": "API key"
         },
         "data_description": {
-          "production_entity": "Production load curve sensor (e.g. PV power)",
+          "production_entity": "Production power sensor (e.g. PV power)",
+          "consumption_entity": "Consumption power sensor",
           "grid_entity": "Grid power sensor (positive = import, negative = export)",
-          "battery_entity": "Battery power sensor (positive = charge, negative = discharge)",
-          "battery_soc_entity": "Battery state of charge sensor (percentage)",
+          "add_battery_entity": "Battery charging power sensor",
+          "out_battery_entity": "Battery discharging power sensor",
+          "soc_entity": "Battery state of charge sensor in % (optional)",
           "update_interval": "Data sending frequency in hours",
-          "api_key": "Your Romande Dynamics API key",
-          "ha_url": "External URL of your Home Assistant (e.g. https://my-ha.duckdns.org)",
-          "ha_token": "Long-lived access token for Home Assistant API"
+          "api_key": "Your Romande Dynamics API key"
         }
       }
     },
     "abort": {
       "already_configured": "This API key is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Consumers",
+        "description": "{consumers_list}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_consumer": {
+        "title": "Add a consumer",
+        "data": {
+          "consumer_entity": "Entity",
+          "consumer_name": "Display name"
+        },
+        "data_description": {
+          "consumer_entity": "Consumer power sensor (e.g. EV charger, heat pump, pool…)",
+          "consumer_name": "Name that will appear in the cockpit chart"
+        }
+      }
     }
   }
 }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
@@ -11,16 +11,21 @@ from homeassistant.helpers.selector import (
     NumberSelectorMode,
     TextSelector,
     TextSelectorConfig,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+    SelectOptionDict,
 )
 
 from .const import (
+    CONF_ADD_BATTERY_ENTITY,
     CONF_API_KEY,
-    CONF_BATTERY_ENTITY,
-    CONF_BATTERY_SOC_ENTITY,
+    CONF_CONSUMERS,
+    CONF_CONSUMPTION_ENTITY,
     CONF_GRID_ENTITY,
-    CONF_HA_TOKEN,
-    CONF_HA_URL,
+    CONF_OUT_BATTERY_ENTITY,
     CONF_PRODUCTION_ENTITY,
+    CONF_SOC_ENTITY,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
@@ -34,19 +39,27 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
             vol.Required(
                 CONF_PRODUCTION_ENTITY,
                 default=d.get(CONF_PRODUCTION_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            vol.Required(
+                CONF_CONSUMPTION_ENTITY,
+                default=d.get(CONF_CONSUMPTION_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(
                 CONF_GRID_ENTITY,
                 default=d.get(CONF_GRID_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(
-                CONF_BATTERY_ENTITY,
-                default=d.get(CONF_BATTERY_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
+                CONF_ADD_BATTERY_ENTITY,
+                default=d.get(CONF_ADD_BATTERY_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(
-                CONF_BATTERY_SOC_ENTITY,
-                default=d.get(CONF_BATTERY_SOC_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="battery")),
+                CONF_OUT_BATTERY_ENTITY,
+                default=d.get(CONF_OUT_BATTERY_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            vol.Optional(
+                CONF_SOC_ENTITY,
+                default=d.get(CONF_SOC_ENTITY, ""),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(
                 CONF_UPDATE_INTERVAL,
                 default=d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
@@ -63,22 +76,90 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
                 CONF_API_KEY,
                 default=d.get(CONF_API_KEY),
             ): TextSelector(TextSelectorConfig(type="password")),
-            vol.Optional(
-                CONF_HA_URL,
-                default=d.get(CONF_HA_URL, ""),
-            ): TextSelector(TextSelectorConfig(type="url")),
-            vol.Optional(
-                CONF_HA_TOKEN,
-                default=d.get(CONF_HA_TOKEN, ""),
-            ): TextSelector(TextSelectorConfig(type="password")),
         }
     )
+
+
+class HaPiloteComOptionsFlow(OptionsFlow):
+    """Options flow pour gérer les consommateurs."""
+
+    async def async_step_init(self, user_input=None):
+        consumers = list(self.config_entry.options.get(CONF_CONSUMERS, []))
+        if user_input is not None:
+            action = user_input.get("action")
+            if action == "add":
+                return await self.async_step_add_consumer()
+            if action and action.startswith("remove:"):
+                idx = int(action.split(":")[1])
+                if 0 <= idx < len(consumers):
+                    consumers.pop(idx)
+                    return self.async_create_entry(data={CONF_CONSUMERS: consumers})
+            return self.async_create_entry(data={CONF_CONSUMERS: consumers})
+
+        options = [
+            SelectOptionDict(value="add", label="Ajouter un consommateur"),
+        ]
+        for i, c in enumerate(consumers):
+            options.append(
+                SelectOptionDict(
+                    value=f"remove:{i}",
+                    label=f"Supprimer : {c['name']}",
+                )
+            )
+        options.append(SelectOptionDict(value="done", label="Terminé"))
+
+        desc = "Aucun consommateur configuré."
+        if consumers:
+            lines = [f"• {c['name']} ({c['entity']})" for c in consumers]
+            desc = "Consommateurs actuels :\n" + "\n".join(lines)
+
+        return self.async_show_form(
+            step_id="init",
+            description_placeholders={"consumers_list": desc},
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action", default="done"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_add_consumer(self, user_input=None):
+        if user_input is not None:
+            consumers = list(self.config_entry.options.get(CONF_CONSUMERS, []))
+            consumers.append({
+                "entity": user_input["consumer_entity"],
+                "name": user_input["consumer_name"],
+            })
+            return self.async_create_entry(data={CONF_CONSUMERS: consumers})
+
+        return self.async_show_form(
+            step_id="add_consumer",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("consumer_entity"): EntitySelector(
+                        EntitySelectorConfig(domain="sensor")
+                    ),
+                    vol.Required("consumer_name"): TextSelector(
+                        TextSelectorConfig(type="text")
+                    ),
+                }
+            ),
+        )
 
 
 class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for HA Pilote Com."""
 
     VERSION = 1
+
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        return HaPiloteComOptionsFlow()
 
     async def async_step_user(
         self, user_input: dict | None = None

@@ -6,23 +6,23 @@
         "description": "Configurez l'envoi automatique de vos courbes de charge vers Romande Dynamics.",
         "data": {
           "production_entity": "Entité de production",
+          "consumption_entity": "Entité de consommation",
           "grid_entity": "Entité réseau (import/export)",
-          "battery_entity": "Entité batterie (charge/décharge)",
-          "battery_soc_entity": "Entité % batterie (SOC)",
+          "add_battery_entity": "Entité charge batterie",
+          "out_battery_entity": "Entité décharge batterie",
+          "soc_entity": "Entité SOC batterie (%)",
           "update_interval": "Intervalle de mise à jour",
-          "api_key": "Clé API",
-          "ha_url": "URL Home Assistant (optionnel)",
-          "ha_token": "Token Home Assistant (optionnel)"
+          "api_key": "Clé API"
         },
         "data_description": {
-          "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
+          "production_entity": "Capteur de puissance de production (ex: puissance PV)",
+          "consumption_entity": "Capteur de puissance de consommation",
           "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
-          "battery_entity": "Capteur de puissance batterie (positif = charge, négatif = décharge)",
-          "battery_soc_entity": "Capteur du pourcentage de charge de la batterie",
+          "add_battery_entity": "Capteur de puissance de charge de la batterie",
+          "out_battery_entity": "Capteur de puissance de décharge de la batterie",
+          "soc_entity": "Capteur du niveau de charge de la batterie en % (optionnel)",
           "update_interval": "Fréquence d'envoi des données en heures",
-          "api_key": "Votre clé API Romande Dynamics",
-          "ha_url": "URL externe de votre Home Assistant (ex: https://mon-ha.duckdns.org)",
-          "ha_token": "Token d'accès longue durée pour l'API Home Assistant"
+          "api_key": "Votre clé API Romande Dynamics"
         }
       },
       "reconfigure": {
@@ -30,28 +30,50 @@
         "description": "Modifiez les paramètres de votre intégration.",
         "data": {
           "production_entity": "Entité de production",
+          "consumption_entity": "Entité de consommation",
           "grid_entity": "Entité réseau (import/export)",
-          "battery_entity": "Entité batterie (charge/décharge)",
-          "battery_soc_entity": "Entité % batterie (SOC)",
+          "add_battery_entity": "Entité charge batterie",
+          "out_battery_entity": "Entité décharge batterie",
+          "soc_entity": "Entité SOC batterie (%)",
           "update_interval": "Intervalle de mise à jour",
-          "api_key": "Clé API",
-          "ha_url": "URL Home Assistant (optionnel)",
-          "ha_token": "Token Home Assistant (optionnel)"
+          "api_key": "Clé API"
         },
         "data_description": {
-          "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
+          "production_entity": "Capteur de puissance de production (ex: puissance PV)",
+          "consumption_entity": "Capteur de puissance de consommation",
           "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
-          "battery_entity": "Capteur de puissance batterie (positif = charge, négatif = décharge)",
-          "battery_soc_entity": "Capteur du pourcentage de charge de la batterie",
+          "add_battery_entity": "Capteur de puissance de charge de la batterie",
+          "out_battery_entity": "Capteur de puissance de décharge de la batterie",
+          "soc_entity": "Capteur du niveau de charge de la batterie en % (optionnel)",
           "update_interval": "Fréquence d'envoi des données en heures",
-          "api_key": "Votre clé API Romande Dynamics",
-          "ha_url": "URL externe de votre Home Assistant (ex: https://mon-ha.duckdns.org)",
-          "ha_token": "Token d'accès longue durée pour l'API Home Assistant"
+          "api_key": "Votre clé API Romande Dynamics"
         }
       }
     },
     "abort": {
       "already_configured": "Cette clé API est déjà configurée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Consommateurs",
+        "description": "{consumers_list}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_consumer": {
+        "title": "Ajouter un consommateur",
+        "data": {
+          "consumer_entity": "Entité",
+          "consumer_name": "Nom affiché"
+        },
+        "data_description": {
+          "consumer_entity": "Capteur de puissance du consommateur (ex: borne VE, PAC, piscine…)",
+          "consumer_name": "Nom qui apparaîtra dans le graphique du cockpit"
+        }
+      }
     }
   }
 }
