@@ -156,6 +156,7 @@ async def async_setup_entry(
         prod_history = await _get_history(hass, start, now, production_entity)
         grid_history = await _get_history(hass, start, now, grid_entity)
         bat_history = await _get_history(hass, start, now, battery_entity)
+        soc_history = await _get_history(hass, start, now, battery_soc_entity)
 
         import_history, export_history = _split_signed(grid_history)
         add_bat_history, out_bat_history = _split_signed(bat_history)
@@ -176,6 +177,7 @@ async def async_setup_entry(
             "add_battery_history": add_bat_history,
             "out_battery_unit": bat_unit,
             "out_battery_history": out_bat_history,
+            "soc_history": soc_history,
         }
 
         try:
