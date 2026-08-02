@@ -263,12 +263,22 @@ async def async_setup_entry(
                 is_counter = (
                     state_class in ("total_increasing", "total")
                     or device_class == "energy"
-                    or unit.lower() in ("kwh", "wh")
+                    or unit.lower().strip() in ("kwh", "wh")
                 )
                 c_history = await _get_history(hass, start, now, entity_id, use_delta=is_counter)
+                if not is_counter and c_history and unit.lower().strip() in ("kwh", "wh"):
+                    max_val = max((p["value"] for p in c_history), default=0)
+                    if max_val > 50:
+                        _LOGGER.warning(
+                            "Consumer %s: values look like raw counter (max=%s), forcing delta mode",
+                            name, max_val,
+                        )
+                        c_history = await _get_history(hass, start, now, entity_id, use_delta=True)
+                        is_counter = True
                 _LOGGER.warning(
-                    "Consumer %s: state_class=%s, device_class=%s, unit=%s, is_counter=%s, points=%d",
+                    "Consumer %s: state_class=%r, device_class=%r, unit=%r, is_counter=%s, points=%d, first_val=%s",
                     name, state_class, device_class, unit, is_counter, len(c_history),
+                    c_history[0]["value"] if c_history else "N/A",
                 )
                 consumers_data.append({
                     "name": name,
@@ -499,9 +509,18 @@ async def async_setup_entry(
                         is_ctr = (
                             sc in ("total_increasing", "total")
                             or dc == "energy"
-                            or c_unit.lower() in ("kwh", "wh")
+                            or c_unit.lower().strip() in ("kwh", "wh")
                         )
                         c_h = await _get_history(hass, start_utc, end_utc, eid, use_delta=is_ctr)
+                        if not is_ctr and c_h and c_unit.lower().strip() in ("kwh", "wh"):
+                            max_val = max((p["value"] for p in c_h), default=0)
+                            if max_val > 50:
+                                _LOGGER.warning(
+                                    "Backfill consumer %s: raw counter detected (max=%s), forcing delta",
+                                    consumer["name"], max_val,
+                                )
+                                c_h = await _get_history(hass, start_utc, end_utc, eid, use_delta=True)
+                                is_ctr = True
                         c_data.append({
                             "name": consumer["name"],
                             "entity": eid,
