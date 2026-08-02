@@ -149,7 +149,7 @@ def _delta_15min(states: list, period_start: datetime, period_end: datetime) -> 
         if v_start is not None and v_end is not None:
             delta = v_end - v_start
             if delta < 0:
-                delta = v_end if v_end < 50 else 0
+                delta = v_end
             result.append({
                 "timestamp": bucket_dt.isoformat(),
                 "value": round(delta, 5),
@@ -190,6 +190,47 @@ async def _get_history(hass, start, now, entity_id, use_delta=False):
 
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _detect_counter(hass, entity_id, name):
+    """Detect if entity is a cumulative counter. Result is cached in hass.data."""
+    cache = hass.data.setdefault(DOMAIN, {}).setdefault("counter_cache", {})
+
+    c_state = hass.states.get(entity_id)
+    if not c_state:
+        if cache.get(entity_id):
+            _LOGGER.warning("Consumer %s: entity unavailable, using cached counter=True", name)
+            return True, "", "", ""
+        return None, "", "", ""
+
+    sc = c_state.attributes.get("state_class", "")
+    dc = c_state.attributes.get("device_class", "")
+    unit = c_state.attributes.get("unit_of_measurement", "")
+
+    if not unit and not sc and not dc:
+        if cache.get(entity_id):
+            _LOGGER.warning("Consumer %s: attributes empty, using cached counter=True", name)
+            return True, sc, dc, unit
+        _LOGGER.warning("Consumer %s: attributes not loaded, skipping", name)
+        return None, sc, dc, unit
+
+    is_counter = (
+        sc in ("total_increasing", "total")
+        or dc == "energy"
+        or unit.lower().strip() in ("kwh", "wh")
+    )
+
+    if not is_counter and cache.get(entity_id):
+        _LOGGER.warning(
+            "Consumer %s: attributes say not counter (sc=%r dc=%r unit=%r) but cache says counter — forcing delta",
+            name, sc, dc, unit,
+        )
+        is_counter = True
+
+    if is_counter:
+        cache[entity_id] = True
+
+    return is_counter, sc, dc, unit
 
 
 async def async_setup_entry(
@@ -250,41 +291,20 @@ async def async_setup_entry(
             for consumer in consumers:
                 entity_id = consumer["entity"]
                 name = consumer["name"]
-                c_state = hass.states.get(entity_id)
-                if not c_state:
-                    _LOGGER.debug("Consumer entity %s not available", entity_id)
+                is_counter, sc, dc, unit = _detect_counter(hass, entity_id, name)
+                if is_counter is None:
                     continue
-                state_class = c_state.attributes.get("state_class", "")
-                device_class = c_state.attributes.get("device_class", "")
-                unit = c_state.attributes.get("unit_of_measurement", "")
-                if not unit and not state_class and not device_class:
-                    _LOGGER.warning("Consumer %s: attributes not loaded yet, skipping", name)
-                    continue
-                is_counter = (
-                    state_class in ("total_increasing", "total")
-                    or device_class == "energy"
-                    or unit.lower().strip() in ("kwh", "wh")
-                )
                 c_history = await _get_history(hass, start, now, entity_id, use_delta=is_counter)
-                if not is_counter and c_history and unit.lower().strip() in ("kwh", "wh"):
-                    max_val = max((p["value"] for p in c_history), default=0)
-                    if max_val > 50:
-                        _LOGGER.warning(
-                            "Consumer %s: values look like raw counter (max=%s), forcing delta mode",
-                            name, max_val,
-                        )
-                        c_history = await _get_history(hass, start, now, entity_id, use_delta=True)
-                        is_counter = True
                 _LOGGER.warning(
-                    "Consumer %s: state_class=%r, device_class=%r, unit=%r, is_counter=%s, points=%d, first_val=%s",
-                    name, state_class, device_class, unit, is_counter, len(c_history),
+                    "Consumer %s: sc=%r dc=%r unit=%r counter=%s pts=%d first=%s",
+                    name, sc, dc, unit, is_counter, len(c_history),
                     c_history[0]["value"] if c_history else "N/A",
                 )
                 consumers_data.append({
                     "name": name,
                     "entity": entity_id,
                     "unit": unit,
-                    "state_class": state_class,
+                    "state_class": sc,
                     "history": c_history,
                 })
             if consumers_data:
@@ -497,34 +517,15 @@ async def async_setup_entry(
                     c_data = []
                     for consumer in consumers:
                         eid = consumer["entity"]
-                        c_state = hass.states.get(eid)
-                        if not c_state:
+                        c_name = consumer["name"]
+                        is_ctr, sc, dc, c_unit = _detect_counter(hass, eid, c_name)
+                        if is_ctr is None:
                             continue
-                        sc = c_state.attributes.get("state_class", "")
-                        dc = c_state.attributes.get("device_class", "")
-                        c_unit = c_state.attributes.get("unit_of_measurement", "")
-                        if not c_unit and not sc and not dc:
-                            _LOGGER.warning("Backfill: consumer %s attributes not loaded, skipping", consumer["name"])
-                            continue
-                        is_ctr = (
-                            sc in ("total_increasing", "total")
-                            or dc == "energy"
-                            or c_unit.lower().strip() in ("kwh", "wh")
-                        )
                         c_h = await _get_history(hass, start_utc, end_utc, eid, use_delta=is_ctr)
-                        if not is_ctr and c_h and c_unit.lower().strip() in ("kwh", "wh"):
-                            max_val = max((p["value"] for p in c_h), default=0)
-                            if max_val > 50:
-                                _LOGGER.warning(
-                                    "Backfill consumer %s: raw counter detected (max=%s), forcing delta",
-                                    consumer["name"], max_val,
-                                )
-                                c_h = await _get_history(hass, start_utc, end_utc, eid, use_delta=True)
-                                is_ctr = True
                         c_data.append({
-                            "name": consumer["name"],
+                            "name": c_name,
                             "entity": eid,
-                            "unit": c_state.attributes.get("unit_of_measurement", ""),
+                            "unit": c_unit,
                             "state_class": sc,
                             "history": c_h,
                         })
