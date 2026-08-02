@@ -13,6 +13,11 @@ CONF_CONSUMERS = "consumers"
 DEFAULT_UPDATE_INTERVAL = 1
 
 API_URL = "https://carrard.ch/pilote/api/post_data_user.php"
+COVERAGE_API_URL = "https://carrard.ch/pilote/api/get_coverage.php"
+
+BACKFILL_DAYS = 7
+BACKFILL_MAX_RETRIES = 2
+BACKFILL_INTERVAL_HOURS = 6
 
 LIVE_API_URL = "https://carrard.ch/pilote/api/post_live.php"
 LIVE_INTERVAL_SECONDS = 3
