@@ -374,24 +374,24 @@ async def async_setup_entry(
             c_existing = set(consumer_existing.get(c_name, []))
             c_missing = expected - c_existing
             if c_missing:
-                _LOGGER.debug(
+                _LOGGER.warning(
                     "Backfill: consommateur '%s' manque %d slots",
                     c_name, len(c_missing),
                 )
             missing = missing | c_missing
 
         if not missing:
-            _LOGGER.debug("Backfill: aucun trou détecté")
+            _LOGGER.warning("Backfill: aucun trou détecté")
             return
 
         actionable = sorted(
             s for s in missing if failures.get(s, 0) < BACKFILL_MAX_RETRIES
         )
         if not actionable:
-            _LOGGER.debug("Backfill: tous les trous ont atteint le max de tentatives")
+            _LOGGER.warning("Backfill: tous les trous ont atteint le max de tentatives")
             return
 
-        _LOGGER.info("Backfill: %d trous, %d à traiter", len(missing), len(actionable))
+        _LOGGER.warning("Backfill: %d trous, %d à traiter", len(missing), len(actionable))
 
         ranges = []
         r_start = None
@@ -429,7 +429,7 @@ async def async_setup_entry(
                 if not prod_h and not grid_h:
                     for sl in range_slots:
                         failures[sl] = failures.get(sl, 0) + 1
-                    _LOGGER.debug("Backfill: pas de données recorder pour %s→%s", r_start, r_end)
+                    _LOGGER.warning("Backfill: pas de données recorder pour %s→%s", r_start, r_end)
                     continue
 
                 imp_h, exp_h = _split_signed(grid_h)
@@ -484,7 +484,7 @@ async def async_setup_entry(
                         API_URL, json=payload, timeout=aiohttp.ClientTimeout(total=60)
                     ) as resp:
                         if resp.status == 200:
-                            _LOGGER.info(
+                            _LOGGER.warning(
                                 "Backfill OK: %s → %s (%d points)",
                                 r_start, r_end, len(prod_h),
                             )
