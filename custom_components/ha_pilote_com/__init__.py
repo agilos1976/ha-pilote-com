@@ -357,6 +357,7 @@ async def async_setup_entry(
             return
 
         existing = set(coverage.get("slots", []))
+        consumer_existing = coverage.get("consumer_slots", {})
 
         expected = set()
         bucket = _bucket_start(start_local.replace(tzinfo=None))
@@ -366,6 +367,19 @@ async def async_setup_entry(
             bucket += timedelta(minutes=BUCKET_MINUTES)
 
         missing = expected - existing
+
+        consumers = entry.options.get(CONF_CONSUMERS, [])
+        for consumer in consumers:
+            c_name = consumer["name"]
+            c_existing = set(consumer_existing.get(c_name, []))
+            c_missing = expected - c_existing
+            if c_missing:
+                _LOGGER.debug(
+                    "Backfill: consommateur '%s' manque %d slots",
+                    c_name, len(c_missing),
+                )
+            missing = missing | c_missing
+
         if not missing:
             _LOGGER.debug("Backfill: aucun trou détecté")
             return
