@@ -305,6 +305,7 @@ async def async_setup_entry(
                     "entity": entity_id,
                     "unit": unit,
                     "state_class": sc,
+                    "category": consumer.get("category", "other"),
                     "history": c_history,
                 })
             if consumers_data:
@@ -527,6 +528,7 @@ async def async_setup_entry(
                             "entity": eid,
                             "unit": c_unit,
                             "state_class": sc,
+                            "category": consumer.get("category", "other"),
                             "history": c_h,
                         })
                     if c_data:

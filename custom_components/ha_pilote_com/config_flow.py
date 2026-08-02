@@ -108,9 +108,10 @@ class HaPiloteComOptionsFlow(OptionsFlow):
             )
         options.append(SelectOptionDict(value="done", label="Terminé"))
 
+        cat_labels = {"ev_charger": "Borne de recharge", "heat_pump": "PAC", "pool": "Piscine", "hot_water": "Chauffe-eau", "appliance": "Électroménager", "other": "Autres"}
         desc = "Aucun consommateur configuré."
         if consumers:
-            lines = [f"• {c['name']} ({c['entity']})" for c in consumers]
+            lines = [f"• {c['name']} [{cat_labels.get(c.get('category', 'other'), 'Autres')}] ({c['entity']})" for c in consumers]
             desc = "Consommateurs actuels :\n" + "\n".join(lines)
 
         return self.async_show_form(
@@ -134,6 +135,7 @@ class HaPiloteComOptionsFlow(OptionsFlow):
             consumers.append({
                 "entity": user_input["consumer_entity"],
                 "name": user_input["consumer_name"],
+                "category": user_input.get("consumer_category", "other"),
             })
             return self.async_create_entry(data={CONF_CONSUMERS: consumers})
 
@@ -146,6 +148,19 @@ class HaPiloteComOptionsFlow(OptionsFlow):
                     ),
                     vol.Required("consumer_name"): TextSelector(
                         TextSelectorConfig(type="text")
+                    ),
+                    vol.Required("consumer_category", default="other"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                SelectOptionDict(value="ev_charger", label="Borne de recharge"),
+                                SelectOptionDict(value="heat_pump", label="Pompe à chaleur (PAC)"),
+                                SelectOptionDict(value="pool", label="Piscine"),
+                                SelectOptionDict(value="hot_water", label="Chauffe-eau"),
+                                SelectOptionDict(value="appliance", label="Électroménager"),
+                                SelectOptionDict(value="other", label="Autres"),
+                            ],
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
                     ),
                 }
             ),

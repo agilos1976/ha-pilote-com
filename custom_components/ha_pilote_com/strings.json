@@ -67,11 +67,13 @@
         "title": "Ajouter un consommateur",
         "data": {
           "consumer_entity": "Entité",
-          "consumer_name": "Nom d'affichage"
+          "consumer_name": "Nom d'affichage",
+          "consumer_category": "Catégorie"
         },
         "data_description": {
           "consumer_entity": "Capteur de puissance du consommateur (ex: borne de recharge, PAC, piscine…)",
-          "consumer_name": "Nom qui apparaîtra dans le graphique du cockpit"
+          "consumer_name": "Nom qui apparaîtra dans le graphique du cockpit",
+          "consumer_category": "Type d'appareil pour le regroupement dans le cockpit"
         }
       }
     }
