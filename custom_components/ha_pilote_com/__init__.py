@@ -255,6 +255,9 @@ async def async_setup_entry(
                 state_class = c_state.attributes.get("state_class", "")
                 device_class = c_state.attributes.get("device_class", "")
                 unit = c_state.attributes.get("unit_of_measurement", "")
+                if not unit and not state_class and not device_class:
+                    _LOGGER.warning("Consumer %s: attributes not loaded yet, skipping", name)
+                    continue
                 is_counter = (
                     state_class in ("total_increasing", "total")
                     or device_class == "energy"
@@ -488,6 +491,9 @@ async def async_setup_entry(
                         sc = c_state.attributes.get("state_class", "")
                         dc = c_state.attributes.get("device_class", "")
                         c_unit = c_state.attributes.get("unit_of_measurement", "")
+                        if not c_unit and not sc and not dc:
+                            _LOGGER.warning("Backfill: consumer %s attributes not loaded, skipping", consumer["name"])
+                            continue
                         is_ctr = (
                             sc in ("total_increasing", "total")
                             or dc == "energy"
@@ -543,9 +549,12 @@ async def async_setup_entry(
     entry.async_on_unload(unsub_backfill)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
-    await _send_data()
+    async def _delayed_start():
+        await asyncio.sleep(60)
+        await _send_data()
+        await _backfill()
 
-    hass.async_create_task(_backfill())
+    hass.async_create_task(_delayed_start())
 
     return True
 
