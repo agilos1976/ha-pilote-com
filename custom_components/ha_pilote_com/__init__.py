@@ -411,8 +411,8 @@ async def async_setup_entry(
             ranges.append((r_start, r_end))
 
         for r_start, r_end in ranges:
-            start_utc = r_start.replace(tzinfo=tz).astimezone(dt_util.UTC).replace(tzinfo=None)
-            end_utc = r_end.replace(tzinfo=tz).astimezone(dt_util.UTC).replace(tzinfo=None)
+            start_utc = r_start.replace(tzinfo=tz).astimezone(dt_util.UTC)
+            end_utc = r_end.replace(tzinfo=tz).astimezone(dt_util.UTC)
 
             range_slots = []
             s = r_start
