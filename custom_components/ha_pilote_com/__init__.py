@@ -112,6 +112,9 @@ def _aggregate_15min(states: list, period_start: datetime, period_end: datetime)
     return result
 
 
+MAX_KWH_PER_BUCKET = 50.0
+
+
 def _delta_15min(states: list, period_start: datetime, period_end: datetime) -> list[dict]:
     """Calculate energy deltas per 15-min bucket for cumulative counters (total_increasing)."""
     samples = []
@@ -148,6 +151,13 @@ def _delta_15min(states: list, period_start: datetime, period_end: datetime) -> 
             delta = v_end - v_start
             if delta < 0:
                 delta = v_end
+            if delta > MAX_KWH_PER_BUCKET:
+                _LOGGER.warning(
+                    "Delta %s kWh in bucket %s implausible (max %s), "
+                    "likely counter start from 0 — skipping",
+                    delta, bucket_dt, MAX_KWH_PER_BUCKET,
+                )
+                delta = 0
             result.append({
                 "timestamp": bucket_dt.isoformat(),
                 "value": round(delta, 5),
