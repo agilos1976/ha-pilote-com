@@ -491,13 +491,9 @@ async def async_setup_entry(
                         else:
                             body = await resp.text()
                             _LOGGER.error("Backfill API error %s: %s", resp.status, body)
-                            for sl in range_slots:
-                                failures[sl] = failures.get(sl, 0) + 1
 
             except Exception as err:
                 _LOGGER.error("Backfill error %s→%s: %s", r_start, r_end, err)
-                for sl in range_slots:
-                    failures[sl] = failures.get(sl, 0) + 1
 
     unsub_history = async_track_time_interval(
         hass,
