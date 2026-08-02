@@ -258,6 +258,7 @@ async def async_setup_entry(
                     "name": name,
                     "entity": entity_id,
                     "unit": unit,
+                    "state_class": state_class,
                     "history": c_history,
                 })
             if consumers_data:
