@@ -9,7 +9,6 @@ CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
 CONF_HA_URL = "ha_url"
 CONF_HA_TOKEN = "ha_token"
 CONF_CONSUMERS = "consumers"
-
 DEFAULT_UPDATE_INTERVAL = 1
 
 API_URL = "https://carrard.ch/pilote/api/post_data_user.php"

@@ -253,12 +253,17 @@ async def async_setup_entry(
                     _LOGGER.debug("Consumer entity %s not available", entity_id)
                     continue
                 state_class = c_state.attributes.get("state_class", "")
-                is_counter = state_class in ("total_increasing", "total")
-                c_history = await _get_history(hass, start, now, entity_id, use_delta=is_counter)
+                device_class = c_state.attributes.get("device_class", "")
                 unit = c_state.attributes.get("unit_of_measurement", "")
-                _LOGGER.debug(
-                    "Consumer %s: state_class=%s, is_counter=%s, unit=%s, points=%d",
-                    name, state_class, is_counter, unit, len(c_history),
+                is_counter = (
+                    state_class in ("total_increasing", "total")
+                    or device_class == "energy"
+                    or unit.lower() in ("kwh", "wh")
+                )
+                c_history = await _get_history(hass, start, now, entity_id, use_delta=is_counter)
+                _LOGGER.warning(
+                    "Consumer %s: state_class=%s, device_class=%s, unit=%s, is_counter=%s, points=%d",
+                    name, state_class, device_class, unit, is_counter, len(c_history),
                 )
                 consumers_data.append({
                     "name": name,
@@ -481,7 +486,13 @@ async def async_setup_entry(
                         if not c_state:
                             continue
                         sc = c_state.attributes.get("state_class", "")
-                        is_ctr = sc in ("total_increasing", "total")
+                        dc = c_state.attributes.get("device_class", "")
+                        c_unit = c_state.attributes.get("unit_of_measurement", "")
+                        is_ctr = (
+                            sc in ("total_increasing", "total")
+                            or dc == "energy"
+                            or c_unit.lower() in ("kwh", "wh")
+                        )
                         c_h = await _get_history(hass, start_utc, end_utc, eid, use_delta=is_ctr)
                         c_data.append({
                             "name": consumer["name"],
