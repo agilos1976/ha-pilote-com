@@ -106,6 +106,51 @@ def _aggregate_15min(states: list, period_start: datetime, period_end: datetime)
     return result
 
 
+def _delta_15min(states: list, period_start: datetime, period_end: datetime) -> list[dict]:
+    """Calculate energy deltas per 15-min bucket for cumulative counters (total_increasing)."""
+    samples = []
+    for state in states:
+        if state.state in ("unavailable", "unknown"):
+            continue
+        try:
+            value = float(state.state)
+        except ValueError:
+            continue
+        samples.append((state.last_updated, value))
+
+    if not samples:
+        return []
+
+    samples.sort(key=lambda s: s[0])
+
+    def value_at(t):
+        v = None
+        for ts, val in samples:
+            if ts <= t:
+                v = val
+            else:
+                break
+        return v
+
+    result = []
+    bucket_dt = _bucket_start(period_start)
+    while bucket_dt < period_end:
+        bucket_end = bucket_dt + timedelta(minutes=BUCKET_MINUTES)
+        v_start = value_at(bucket_dt)
+        v_end = value_at(bucket_end)
+        if v_start is not None and v_end is not None:
+            delta = v_end - v_start
+            if delta < 0:
+                delta = v_end
+            result.append({
+                "timestamp": bucket_dt.isoformat(),
+                "value": round(delta, 5),
+            })
+        bucket_dt += timedelta(minutes=BUCKET_MINUTES)
+
+    return result
+
+
 def _split_signed(history: list[dict]) -> tuple[list[dict], list[dict]]:
     positive = []
     negative = []
@@ -121,7 +166,7 @@ def _split_signed(history: list[dict]) -> tuple[list[dict], list[dict]]:
     return positive, negative
 
 
-async def _get_history(hass, start, now, entity_id):
+async def _get_history(hass, start, now, entity_id, use_delta=False):
     states = await get_instance(hass).async_add_executor_job(
         state_changes_during_period,
         hass,
@@ -129,7 +174,10 @@ async def _get_history(hass, start, now, entity_id):
         now,
         entity_id,
     )
-    return _aggregate_15min(states.get(entity_id, []), start, now)
+    raw = states.get(entity_id, [])
+    if use_delta:
+        return _delta_15min(raw, start, now)
+    return _aggregate_15min(raw, start, now)
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -195,11 +243,18 @@ async def async_setup_entry(
                 if not c_state:
                     _LOGGER.debug("Consumer entity %s not available", entity_id)
                     continue
-                c_history = await _get_history(hass, start, now, entity_id)
+                state_class = c_state.attributes.get("state_class", "")
+                is_counter = state_class in ("total_increasing", "total")
+                c_history = await _get_history(hass, start, now, entity_id, use_delta=is_counter)
+                unit = c_state.attributes.get("unit_of_measurement", "")
+                _LOGGER.debug(
+                    "Consumer %s: state_class=%s, is_counter=%s, unit=%s, points=%d",
+                    name, state_class, is_counter, unit, len(c_history),
+                )
                 consumers_data.append({
                     "name": name,
                     "entity": entity_id,
-                    "unit": c_state.attributes.get("unit_of_measurement", ""),
+                    "unit": unit,
                     "history": c_history,
                 })
             if consumers_data:
