@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+import asyncio
+
 import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
@@ -393,7 +395,7 @@ async def async_setup_entry(
 
         _LOGGER.warning("Backfill: %d trous, %d à traiter", len(missing), len(actionable))
 
-        ranges = []
+        raw_ranges = []
         r_start = None
         r_end = None
         for slot_str in actionable:
@@ -404,13 +406,25 @@ async def async_setup_entry(
             elif slot_dt == r_end:
                 r_end = slot_dt + timedelta(minutes=BUCKET_MINUTES)
             else:
-                ranges.append((r_start, r_end))
+                raw_ranges.append((r_start, r_end))
                 r_start = slot_dt
                 r_end = slot_dt + timedelta(minutes=BUCKET_MINUTES)
         if r_start:
-            ranges.append((r_start, r_end))
+            raw_ranges.append((r_start, r_end))
 
-        for r_start, r_end in ranges:
+        max_chunk = timedelta(hours=24)
+        ranges = []
+        for r_s, r_e in raw_ranges:
+            while r_s < r_e:
+                chunk_end = min(r_s + max_chunk, r_e)
+                ranges.append((r_s, chunk_end))
+                r_s = chunk_end
+
+        _LOGGER.warning("Backfill: %d tranches à envoyer", len(ranges))
+
+        for idx, (r_start, r_end) in enumerate(ranges):
+            if idx > 0:
+                await asyncio.sleep(5)
             start_utc = r_start.replace(tzinfo=tz).astimezone(dt_util.UTC)
             end_utc = r_end.replace(tzinfo=tz).astimezone(dt_util.UTC)
 
