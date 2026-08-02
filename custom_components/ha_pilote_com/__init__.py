@@ -220,6 +220,9 @@ async def async_setup_entry(
         payload = {
             "api_key": api_key,
             "production_entity": production_entity,
+            "grid_entity": grid_entity,
+            "battery_entity": battery_entity,
+            "battery_soc_entity": battery_soc_entity,
             "production_unit": prod_state.attributes.get("unit_of_measurement", ""),
             "production_history": prod_history,
             "import_unit": grid_unit,
