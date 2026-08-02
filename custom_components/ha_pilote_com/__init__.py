@@ -149,7 +149,7 @@ def _delta_15min(states: list, period_start: datetime, period_end: datetime) -> 
         if v_start is not None and v_end is not None:
             delta = v_end - v_start
             if delta < 0:
-                delta = v_end
+                delta = v_end if v_end < 50 else 0
             result.append({
                 "timestamp": bucket_dt.isoformat(),
                 "value": round(delta, 5),
