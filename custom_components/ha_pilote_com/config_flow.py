@@ -20,6 +20,7 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_API_KEY,
+    CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
@@ -27,6 +28,11 @@ from .const import (
     CONF_GRID_IMPORT_POSITIVE,
     CONF_HA_TOKEN,
     CONF_HA_URL,
+    CONF_METER_BATTERY_CHARGE,
+    CONF_METER_BATTERY_DISCHARGE,
+    CONF_METER_EXPORT,
+    CONF_METER_IMPORT,
+    CONF_METER_PRODUCTION,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
@@ -73,6 +79,58 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
         schema[vol.Optional(CONF_BATTERY_SOC_ENTITY)] = EntitySelector(
             EntitySelectorConfig(domain="sensor", device_class="battery")
         )
+
+    meter_prod = d.get(CONF_METER_PRODUCTION)
+    if meter_prod:
+        schema[vol.Optional(CONF_METER_PRODUCTION, default=meter_prod)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="energy")
+        )
+    else:
+        schema[vol.Optional(CONF_METER_PRODUCTION)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="energy")
+        )
+
+    meter_imp = d.get(CONF_METER_IMPORT)
+    if meter_imp:
+        schema[vol.Optional(CONF_METER_IMPORT, default=meter_imp)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="energy")
+        )
+    else:
+        schema[vol.Optional(CONF_METER_IMPORT)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="energy")
+        )
+
+    meter_exp = d.get(CONF_METER_EXPORT)
+    if meter_exp:
+        schema[vol.Optional(CONF_METER_EXPORT, default=meter_exp)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="energy")
+        )
+    else:
+        schema[vol.Optional(CONF_METER_EXPORT)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="energy")
+        )
+
+    meter_bat_ch = d.get(CONF_METER_BATTERY_CHARGE)
+    if meter_bat_ch:
+        schema[vol.Optional(CONF_METER_BATTERY_CHARGE, default=meter_bat_ch)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="energy")
+        )
+    else:
+        schema[vol.Optional(CONF_METER_BATTERY_CHARGE)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="energy")
+        )
+
+    meter_bat_dis = d.get(CONF_METER_BATTERY_DISCHARGE)
+    if meter_bat_dis:
+        schema[vol.Optional(CONF_METER_BATTERY_DISCHARGE, default=meter_bat_dis)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="energy")
+        )
+    else:
+        schema[vol.Optional(CONF_METER_BATTERY_DISCHARGE)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="energy")
+        )
+
+    schema[vol.Required(CONF_BATTERY_CHARGE_POSITIVE, default=d.get(CONF_BATTERY_CHARGE_POSITIVE, True))] = BooleanSelector()
 
     schema[vol.Required(CONF_UPDATE_INTERVAL, default=d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))] = NumberSelector(
         NumberSelectorConfig(min=1, max=24, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="h")
@@ -190,7 +248,7 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            for key in (CONF_PRODUCTION_ENTITY, CONF_BATTERY_ENTITY, CONF_BATTERY_SOC_ENTITY):
+            for key in (CONF_PRODUCTION_ENTITY, CONF_BATTERY_ENTITY, CONF_BATTERY_SOC_ENTITY, CONF_METER_PRODUCTION, CONF_METER_IMPORT, CONF_METER_EXPORT, CONF_METER_BATTERY_CHARGE, CONF_METER_BATTERY_DISCHARGE):
                 user_input.setdefault(key, "")
             await self.async_set_unique_id(user_input[CONF_API_KEY])
             self._abort_if_unique_id_configured()
@@ -208,7 +266,7 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            for key in (CONF_PRODUCTION_ENTITY, CONF_BATTERY_ENTITY, CONF_BATTERY_SOC_ENTITY):
+            for key in (CONF_PRODUCTION_ENTITY, CONF_BATTERY_ENTITY, CONF_BATTERY_SOC_ENTITY, CONF_METER_PRODUCTION, CONF_METER_IMPORT, CONF_METER_EXPORT, CONF_METER_BATTERY_CHARGE, CONF_METER_BATTERY_DISCHARGE):
                 user_input.setdefault(key, "")
             return self.async_update_reload_and_abort(
                 self._get_reconfigure_entry(),

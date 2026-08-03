@@ -20,6 +20,7 @@ from .const import (
     BACKFILL_INTERVAL_HOURS,
     BACKFILL_MAX_RETRIES,
     CONF_API_KEY,
+    CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
@@ -27,6 +28,11 @@ from .const import (
     CONF_GRID_IMPORT_POSITIVE,
     CONF_HA_TOKEN,
     CONF_HA_URL,
+    CONF_METER_BATTERY_CHARGE,
+    CONF_METER_BATTERY_DISCHARGE,
+    CONF_METER_EXPORT,
+    CONF_METER_IMPORT,
+    CONF_METER_PRODUCTION,
     CONF_PRODUCTION_ENTITY,
     CONF_UPDATE_INTERVAL,
     COVERAGE_API_URL,
@@ -241,6 +247,12 @@ async def async_setup_entry(
     grid_import_positive = entry.data.get(CONF_GRID_IMPORT_POSITIVE, True)
     battery_entity = entry.data.get(CONF_BATTERY_ENTITY, "")
     battery_soc_entity = entry.data.get(CONF_BATTERY_SOC_ENTITY, "")
+    meter_production = entry.data.get(CONF_METER_PRODUCTION, "")
+    meter_import = entry.data.get(CONF_METER_IMPORT, "")
+    meter_export = entry.data.get(CONF_METER_EXPORT, "")
+    meter_battery_charge = entry.data.get(CONF_METER_BATTERY_CHARGE, "")
+    meter_battery_discharge = entry.data.get(CONF_METER_BATTERY_DISCHARGE, "")
+    battery_charge_positive = entry.data.get(CONF_BATTERY_CHARGE_POSITIVE, True)
     interval_hours = int(entry.data[CONF_UPDATE_INTERVAL])
     api_key = entry.data[CONF_API_KEY]
 
@@ -253,31 +265,49 @@ async def async_setup_entry(
         now = dt_util.utcnow()
         start = _bucket_start(now - timedelta(hours=interval_hours))
 
-        grid_history = await _get_history(hass, start, now, grid_entity)
-        if not grid_import_positive:
-            for pt in grid_history:
-                pt["value"] = -pt["value"]
-        import_history, export_history = _split_signed(grid_history)
-        grid_unit = grid_state.attributes.get("unit_of_measurement", "")
+        if meter_import and meter_export:
+            import_history = await _get_history(hass, start, now, meter_import, use_delta=True)
+            export_history = await _get_history(hass, start, now, meter_export, use_delta=True)
+            grid_unit = "kWh"
+        else:
+            grid_history = await _get_history(hass, start, now, grid_entity)
+            if not grid_import_positive:
+                for pt in grid_history:
+                    pt["value"] = -pt["value"]
+            import_history, export_history = _split_signed(grid_history)
+            grid_unit = grid_state.attributes.get("unit_of_measurement", "")
 
         prod_history = []
         prod_unit = ""
-        if production_entity:
+        if meter_production:
+            prod_history = await _get_history(hass, start, now, meter_production, use_delta=True)
+            prod_unit = "kWh"
+        elif production_entity:
             prod_history = await _get_history(hass, start, now, production_entity)
             prod_state = hass.states.get(production_entity)
             prod_unit = prod_state.attributes.get("unit_of_measurement", "") if prod_state else ""
 
-        bat_history = []
-        soc_history = []
+        add_bat_history = []
+        out_bat_history = []
         bat_unit = ""
-        if battery_entity:
+        soc_history = []
+        if meter_battery_charge and meter_battery_discharge:
+            ch_history = await _get_history(hass, start, now, meter_battery_charge, use_delta=True)
+            dis_history = await _get_history(hass, start, now, meter_battery_discharge, use_delta=True)
+            if battery_charge_positive:
+                add_bat_history = ch_history
+                out_bat_history = dis_history
+            else:
+                add_bat_history = dis_history
+                out_bat_history = ch_history
+            bat_unit = "kWh"
+        elif battery_entity:
             bat_history = await _get_history(hass, start, now, battery_entity)
+            add_bat_history, out_bat_history = _split_signed(bat_history)
             bat_state = hass.states.get(battery_entity)
             bat_unit = bat_state.attributes.get("unit_of_measurement", "") if bat_state else ""
         if battery_soc_entity:
             soc_history = await _get_history(hass, start, now, battery_soc_entity)
-
-        add_bat_history, out_bat_history = _split_signed(bat_history)
 
         payload = {
             "api_key": api_key,
@@ -499,34 +529,56 @@ async def async_setup_entry(
                 s += timedelta(minutes=BUCKET_MINUTES)
 
             try:
-                grid_h = await _get_history(hass, start_utc, end_utc, grid_entity)
-                if not grid_import_positive:
-                    for pt in grid_h:
-                        pt["value"] = -pt["value"]
+                if meter_import and meter_export:
+                    imp_h = await _get_history(hass, start_utc, end_utc, meter_import, use_delta=True)
+                    exp_h = await _get_history(hass, start_utc, end_utc, meter_export, use_delta=True)
+                    bf_grid_unit = "kWh"
+                else:
+                    grid_h = await _get_history(hass, start_utc, end_utc, grid_entity)
+                    if not grid_import_positive:
+                        for pt in grid_h:
+                            pt["value"] = -pt["value"]
+                    imp_h, exp_h = _split_signed(grid_h)
+                    grid_state = hass.states.get(grid_entity)
+                    bf_grid_unit = grid_state.attributes.get("unit_of_measurement", "") if grid_state else ""
 
                 prod_h = []
-                if production_entity:
+                bf_prod_unit = ""
+                if meter_production:
+                    prod_h = await _get_history(hass, start_utc, end_utc, meter_production, use_delta=True)
+                    bf_prod_unit = "kWh"
+                elif production_entity:
                     prod_h = await _get_history(hass, start_utc, end_utc, production_entity)
+                    prod_state = hass.states.get(production_entity)
+                    bf_prod_unit = prod_state.attributes.get("unit_of_measurement", "") if prod_state else ""
 
-                bat_h = []
+                add_h = []
+                out_h = []
+                bf_bat_unit = ""
                 soc_h = []
-                if battery_entity:
+                if meter_battery_charge and meter_battery_discharge:
+                    ch_h = await _get_history(hass, start_utc, end_utc, meter_battery_charge, use_delta=True)
+                    dis_h = await _get_history(hass, start_utc, end_utc, meter_battery_discharge, use_delta=True)
+                    if battery_charge_positive:
+                        add_h = ch_h
+                        out_h = dis_h
+                    else:
+                        add_h = dis_h
+                        out_h = ch_h
+                    bf_bat_unit = "kWh"
+                elif battery_entity:
                     bat_h = await _get_history(hass, start_utc, end_utc, battery_entity)
+                    add_h, out_h = _split_signed(bat_h)
+                    bat_state = hass.states.get(battery_entity)
+                    bf_bat_unit = bat_state.attributes.get("unit_of_measurement", "") if bat_state else ""
                 if battery_soc_entity:
                     soc_h = await _get_history(hass, start_utc, end_utc, battery_soc_entity)
 
-                if not grid_h:
+                if not imp_h and not exp_h:
                     for sl in range_slots:
                         failures[sl] = failures.get(sl, 0) + 1
                     _LOGGER.warning("Backfill: pas de données recorder pour %s→%s", r_start, r_end)
                     continue
-
-                imp_h, exp_h = _split_signed(grid_h)
-                add_h, out_h = _split_signed(bat_h)
-
-                grid_state = hass.states.get(grid_entity)
-                prod_state = hass.states.get(production_entity) if production_entity else None
-                bat_state = hass.states.get(battery_entity) if battery_entity else None
 
                 payload = {
                     "api_key": api_key,
@@ -534,15 +586,15 @@ async def async_setup_entry(
                     "grid_entity": grid_entity,
                     "battery_entity": battery_entity,
                     "battery_soc_entity": battery_soc_entity,
-                    "production_unit": prod_state.attributes.get("unit_of_measurement", "") if prod_state else "",
+                    "production_unit": bf_prod_unit,
                     "production_history": prod_h,
-                    "import_unit": grid_state.attributes.get("unit_of_measurement", "") if grid_state else "",
+                    "import_unit": bf_grid_unit,
                     "import_history": imp_h,
-                    "export_unit": grid_state.attributes.get("unit_of_measurement", "") if grid_state else "",
+                    "export_unit": bf_grid_unit,
                     "export_history": exp_h,
-                    "add_battery_unit": bat_state.attributes.get("unit_of_measurement", "") if bat_state else "",
+                    "add_battery_unit": bf_bat_unit,
                     "add_battery_history": add_h,
-                    "out_battery_unit": bat_state.attributes.get("unit_of_measurement", "") if bat_state else "",
+                    "out_battery_unit": bf_bat_unit,
                     "out_battery_history": out_h,
                     "soc_history": soc_h,
                 }
