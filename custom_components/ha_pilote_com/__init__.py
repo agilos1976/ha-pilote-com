@@ -368,10 +368,11 @@ async def async_setup_entry(
                     if resp.status == 200:
                         n_consumers = len(payload.get("consumers", []))
                         _LOGGER.debug(
-                            "History sent: %d prod, %d grid, %d bat, %d consumers",
+                            "History sent: %d prod, %d imp, %d exp, %d bat, %d consumers",
                             len(prod_history),
-                            len(grid_history),
-                            len(bat_history),
+                            len(import_history),
+                            len(export_history),
+                            len(add_bat_history) + len(out_bat_history),
                             n_consumers,
                         )
                     else:
