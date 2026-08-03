@@ -36,21 +36,21 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
     d = defaults or {}
     return vol.Schema(
         {
-            vol.Required(
+            vol.Optional(
                 CONF_PRODUCTION_ENTITY,
-                default=d.get(CONF_PRODUCTION_ENTITY),
+                default=d.get(CONF_PRODUCTION_ENTITY, ""),
             ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
             vol.Required(
                 CONF_GRID_ENTITY,
                 default=d.get(CONF_GRID_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-            vol.Required(
+            vol.Optional(
                 CONF_BATTERY_ENTITY,
-                default=d.get(CONF_BATTERY_ENTITY),
+                default=d.get(CONF_BATTERY_ENTITY, ""),
             ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-            vol.Required(
+            vol.Optional(
                 CONF_BATTERY_SOC_ENTITY,
-                default=d.get(CONF_BATTERY_SOC_ENTITY),
+                default=d.get(CONF_BATTERY_SOC_ENTITY, ""),
             ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="battery")),
             vol.Required(
                 CONF_UPDATE_INTERVAL,

@@ -236,35 +236,44 @@ def _detect_counter(hass, entity_id, name):
 async def async_setup_entry(
     hass: HomeAssistant, entry: HaPiloteComConfigEntry
 ) -> bool:
-    production_entity = entry.data[CONF_PRODUCTION_ENTITY]
+    production_entity = entry.data.get(CONF_PRODUCTION_ENTITY, "")
     grid_entity = entry.data[CONF_GRID_ENTITY]
-    battery_entity = entry.data[CONF_BATTERY_ENTITY]
-    battery_soc_entity = entry.data[CONF_BATTERY_SOC_ENTITY]
+    battery_entity = entry.data.get(CONF_BATTERY_ENTITY, "")
+    battery_soc_entity = entry.data.get(CONF_BATTERY_SOC_ENTITY, "")
     interval_hours = int(entry.data[CONF_UPDATE_INTERVAL])
     api_key = entry.data[CONF_API_KEY]
 
     async def _send_data(_now=None):
-        prod_state = hass.states.get(production_entity)
         grid_state = hass.states.get(grid_entity)
-        bat_state = hass.states.get(battery_entity)
-
-        if not all([prod_state, grid_state, bat_state]):
-            _LOGGER.warning("One or more entities not available")
+        if not grid_state:
+            _LOGGER.warning("Grid entity not available")
             return
 
         now = dt_util.utcnow()
         start = _bucket_start(now - timedelta(hours=interval_hours))
 
-        prod_history = await _get_history(hass, start, now, production_entity)
         grid_history = await _get_history(hass, start, now, grid_entity)
-        bat_history = await _get_history(hass, start, now, battery_entity)
-        soc_history = await _get_history(hass, start, now, battery_soc_entity)
-
         import_history, export_history = _split_signed(grid_history)
-        add_bat_history, out_bat_history = _split_signed(bat_history)
-
         grid_unit = grid_state.attributes.get("unit_of_measurement", "")
-        bat_unit = bat_state.attributes.get("unit_of_measurement", "")
+
+        prod_history = []
+        prod_unit = ""
+        if production_entity:
+            prod_history = await _get_history(hass, start, now, production_entity)
+            prod_state = hass.states.get(production_entity)
+            prod_unit = prod_state.attributes.get("unit_of_measurement", "") if prod_state else ""
+
+        bat_history = []
+        soc_history = []
+        bat_unit = ""
+        if battery_entity:
+            bat_history = await _get_history(hass, start, now, battery_entity)
+            bat_state = hass.states.get(battery_entity)
+            bat_unit = bat_state.attributes.get("unit_of_measurement", "") if bat_state else ""
+        if battery_soc_entity:
+            soc_history = await _get_history(hass, start, now, battery_soc_entity)
+
+        add_bat_history, out_bat_history = _split_signed(bat_history)
 
         payload = {
             "api_key": api_key,
@@ -272,7 +281,7 @@ async def async_setup_entry(
             "grid_entity": grid_entity,
             "battery_entity": battery_entity,
             "battery_soc_entity": battery_soc_entity,
-            "production_unit": prod_state.attributes.get("unit_of_measurement", ""),
+            "production_unit": prod_unit,
             "production_history": prod_history,
             "import_unit": grid_unit,
             "import_history": import_history,
@@ -344,8 +353,10 @@ async def async_setup_entry(
             if state is not None:
                 entities[entity_id] = str(state.state)
 
-        soc_state = hass.states.get(battery_soc_entity)
-        battery_soc = str(soc_state.state) if soc_state else ""
+        battery_soc = ""
+        if battery_soc_entity:
+            soc_state = hass.states.get(battery_soc_entity)
+            battery_soc = str(soc_state.state) if soc_state else ""
 
         payload = {
             "api_key": api_key,
@@ -476,12 +487,20 @@ async def async_setup_entry(
                 s += timedelta(minutes=BUCKET_MINUTES)
 
             try:
-                prod_h = await _get_history(hass, start_utc, end_utc, production_entity)
                 grid_h = await _get_history(hass, start_utc, end_utc, grid_entity)
-                bat_h = await _get_history(hass, start_utc, end_utc, battery_entity)
-                soc_h = await _get_history(hass, start_utc, end_utc, battery_soc_entity)
 
-                if not prod_h and not grid_h:
+                prod_h = []
+                if production_entity:
+                    prod_h = await _get_history(hass, start_utc, end_utc, production_entity)
+
+                bat_h = []
+                soc_h = []
+                if battery_entity:
+                    bat_h = await _get_history(hass, start_utc, end_utc, battery_entity)
+                if battery_soc_entity:
+                    soc_h = await _get_history(hass, start_utc, end_utc, battery_soc_entity)
+
+                if not grid_h:
                     for sl in range_slots:
                         failures[sl] = failures.get(sl, 0) + 1
                     _LOGGER.warning("Backfill: pas de données recorder pour %s→%s", r_start, r_end)
@@ -490,9 +509,9 @@ async def async_setup_entry(
                 imp_h, exp_h = _split_signed(grid_h)
                 add_h, out_h = _split_signed(bat_h)
 
-                prod_state = hass.states.get(production_entity)
                 grid_state = hass.states.get(grid_entity)
-                bat_state = hass.states.get(battery_entity)
+                prod_state = hass.states.get(production_entity) if production_entity else None
+                bat_state = hass.states.get(battery_entity) if battery_entity else None
 
                 payload = {
                     "api_key": api_key,
