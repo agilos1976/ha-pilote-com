@@ -3,50 +3,78 @@
     "step": {
       "user": {
         "title": "HA Pilote Com",
-        "description": "Configurez l'envoi automatique de vos courbes de charge vers Romande Dynamics.",
+        "description": "Configurez l'envoi de vos données solaires vers Romande Dynamics.\n\nLes capteurs de puissance (W) servent au live. Les compteurs d'énergie (kWh), optionnels, améliorent la précision de l'historique.",
         "data": {
-          "production_entity": "Entité de production",
-          "grid_entity": "Entité réseau (import/export)",
-          "battery_entity": "Entité batterie (charge/décharge)",
-          "battery_soc_entity": "Entité % batterie (SOC)",
-          "update_interval": "Intervalle de mise à jour",
           "api_key": "Clé API",
-          "ha_url": "URL Home Assistant (optionnel)",
-          "ha_token": "Token Home Assistant (optionnel)"
+          "production_entity": "Production solaire (W)",
+          "grid_entity": "Réseau (W)",
+          "grid_import_positive": "Positif = import réseau",
+          "battery_entity": "Batterie (W)",
+          "battery_soc_entity": "Batterie — état de charge (%)",
+          "meter_production": "Compteur — Production (kWh)",
+          "meter_import": "Compteur — Import réseau (kWh)",
+          "meter_export": "Compteur — Export réseau (kWh)",
+          "meter_battery_charge": "Compteur — Charge batterie (kWh)",
+          "meter_battery_discharge": "Compteur — Décharge batterie (kWh)",
+          "battery_charge_positive": "Compteurs batterie dans le bon sens",
+          "update_interval": "Intervalle de mise à jour",
+          "ha_url": "URL Home Assistant",
+          "ha_token": "Token Home Assistant"
         },
         "data_description": {
-          "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
-          "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
-          "battery_entity": "Capteur de puissance batterie (positif = charge, négatif = décharge)",
-          "battery_soc_entity": "Capteur du pourcentage de charge de la batterie",
-          "update_interval": "Fréquence d'envoi des données en heures",
           "api_key": "Votre clé API Romande Dynamics",
-          "ha_url": "URL externe de votre Home Assistant (ex: https://mon-ha.duckdns.org)",
-          "ha_token": "Token d'accès longue durée pour l'API Home Assistant"
+          "production_entity": "Puissance instantanée PV en watts — pour l'affichage temps réel",
+          "grid_entity": "Puissance instantanée réseau — positif = import, négatif = export",
+          "grid_import_positive": "Décochez si votre capteur est inversé (positif = export au lieu d'import)",
+          "battery_entity": "Puissance instantanée batterie — positif = charge, négatif = décharge",
+          "battery_soc_entity": "Pourcentage de charge de la batterie (0–100 %)",
+          "meter_production": "Compteur cumulé kWh — plus précis que la puissance pour les courbes historiques",
+          "meter_import": "Compteur cumulé d'énergie importée depuis le réseau",
+          "meter_export": "Compteur cumulé d'énergie exportée vers le réseau",
+          "meter_battery_charge": "Compteur cumulé d'énergie stockée dans la batterie",
+          "meter_battery_discharge": "Compteur cumulé d'énergie restituée par la batterie",
+          "battery_charge_positive": "Décochez si vos compteurs charge et décharge batterie sont inversés",
+          "update_interval": "Fréquence d'envoi des données historiques (en heures)",
+          "ha_url": "URL externe (ex: https://mon-ha.duckdns.org) — pour le live à distance",
+          "ha_token": "Token longue durée pour le live via WebSocket"
         }
       },
       "reconfigure": {
         "title": "Reconfigurer HA Pilote Com",
-        "description": "Modifiez les paramètres de votre intégration.",
+        "description": "Les capteurs de puissance (W) servent à l'affichage live. Les compteurs d'énergie (kWh) sont optionnels mais donnent des courbes historiques plus précises.",
         "data": {
-          "production_entity": "Entité de production",
-          "grid_entity": "Entité réseau (import/export)",
-          "battery_entity": "Entité batterie (charge/décharge)",
-          "battery_soc_entity": "Entité % batterie (SOC)",
-          "update_interval": "Intervalle de mise à jour",
           "api_key": "Clé API",
-          "ha_url": "URL Home Assistant (optionnel)",
-          "ha_token": "Token Home Assistant (optionnel)"
+          "production_entity": "Production solaire (W)",
+          "grid_entity": "Réseau (W)",
+          "grid_import_positive": "Positif = import réseau",
+          "battery_entity": "Batterie (W)",
+          "battery_soc_entity": "Batterie — état de charge (%)",
+          "meter_production": "Compteur — Production (kWh)",
+          "meter_import": "Compteur — Import réseau (kWh)",
+          "meter_export": "Compteur — Export réseau (kWh)",
+          "meter_battery_charge": "Compteur — Charge batterie (kWh)",
+          "meter_battery_discharge": "Compteur — Décharge batterie (kWh)",
+          "battery_charge_positive": "Compteurs batterie dans le bon sens",
+          "update_interval": "Intervalle de mise à jour",
+          "ha_url": "URL Home Assistant",
+          "ha_token": "Token Home Assistant"
         },
         "data_description": {
-          "production_entity": "Capteur de la courbe de charge de production (ex: puissance PV)",
-          "grid_entity": "Capteur de puissance réseau (positif = import, négatif = export)",
-          "battery_entity": "Capteur de puissance batterie (positif = charge, négatif = décharge)",
-          "battery_soc_entity": "Capteur du pourcentage de charge de la batterie",
-          "update_interval": "Fréquence d'envoi des données en heures",
           "api_key": "Votre clé API Romande Dynamics",
-          "ha_url": "URL externe de votre Home Assistant (ex: https://mon-ha.duckdns.org)",
-          "ha_token": "Token d'accès longue durée pour l'API Home Assistant"
+          "production_entity": "Puissance instantanée PV en watts — pour l'affichage temps réel",
+          "grid_entity": "Puissance instantanée réseau — positif = import, négatif = export",
+          "grid_import_positive": "Décochez si votre capteur est inversé (positif = export au lieu d'import)",
+          "battery_entity": "Puissance instantanée batterie — positif = charge, négatif = décharge",
+          "battery_soc_entity": "Pourcentage de charge de la batterie (0–100 %)",
+          "meter_production": "Compteur cumulé kWh — plus précis que la puissance pour les courbes historiques",
+          "meter_import": "Compteur cumulé d'énergie importée depuis le réseau",
+          "meter_export": "Compteur cumulé d'énergie exportée vers le réseau",
+          "meter_battery_charge": "Compteur cumulé d'énergie stockée dans la batterie",
+          "meter_battery_discharge": "Compteur cumulé d'énergie restituée par la batterie",
+          "battery_charge_positive": "Décochez si vos compteurs charge et décharge batterie sont inversés",
+          "update_interval": "Fréquence d'envoi des données historiques (en heures)",
+          "ha_url": "URL externe (ex: https://mon-ha.duckdns.org) — pour le live à distance",
+          "ha_token": "Token longue durée pour le live via WebSocket"
         }
       }
     },
@@ -67,11 +95,13 @@
         "title": "Ajouter un consommateur",
         "data": {
           "consumer_entity": "Entité",
-          "consumer_name": "Nom d'affichage"
+          "consumer_name": "Nom d'affichage",
+          "consumer_category": "Catégorie"
         },
         "data_description": {
           "consumer_entity": "Capteur de puissance du consommateur (ex: borne de recharge, PAC, piscine…)",
-          "consumer_name": "Nom qui apparaîtra dans le graphique du cockpit"
+          "consumer_name": "Nom qui apparaîtra dans le graphique du cockpit",
+          "consumer_category": "Type d'appareil pour le regroupement dans le cockpit"
         }
       }
     }
