@@ -21,7 +21,7 @@ DEFAULT_UPDATE_INTERVAL = 1
 API_URL = "https://carrard.ch/pilote/api/post_data_user.php"
 COVERAGE_API_URL = "https://carrard.ch/pilote/api/get_coverage.php"
 
-BACKFILL_DAYS = 7
+BACKFILL_DAYS = 45
 BACKFILL_MAX_RETRIES = 2
 BACKFILL_INTERVAL_HOURS = 6
 
