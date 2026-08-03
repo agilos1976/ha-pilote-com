@@ -24,6 +24,7 @@ from .const import (
     CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
     CONF_GRID_ENTITY,
+    CONF_GRID_IMPORT_POSITIVE,
     CONF_HA_TOKEN,
     CONF_HA_URL,
     CONF_PRODUCTION_ENTITY,
@@ -237,6 +238,7 @@ async def async_setup_entry(
 ) -> bool:
     production_entity = entry.data.get(CONF_PRODUCTION_ENTITY, "")
     grid_entity = entry.data[CONF_GRID_ENTITY]
+    grid_import_positive = entry.data.get(CONF_GRID_IMPORT_POSITIVE, True)
     battery_entity = entry.data.get(CONF_BATTERY_ENTITY, "")
     battery_soc_entity = entry.data.get(CONF_BATTERY_SOC_ENTITY, "")
     interval_hours = int(entry.data[CONF_UPDATE_INTERVAL])
@@ -252,6 +254,9 @@ async def async_setup_entry(
         start = _bucket_start(now - timedelta(hours=interval_hours))
 
         grid_history = await _get_history(hass, start, now, grid_entity)
+        if not grid_import_positive:
+            for pt in grid_history:
+                pt["value"] = -pt["value"]
         import_history, export_history = _split_signed(grid_history)
         grid_unit = grid_state.attributes.get("unit_of_measurement", "")
 
@@ -368,6 +373,7 @@ async def async_setup_entry(
             "api_key": api_key,
             "entities": entities,
             "entity_config": entity_config,
+            "grid_import_positive": grid_import_positive,
             "ha_url": ha_url,
             "ha_token": ha_token,
             "latitude": latitude,
@@ -494,6 +500,9 @@ async def async_setup_entry(
 
             try:
                 grid_h = await _get_history(hass, start_utc, end_utc, grid_entity)
+                if not grid_import_positive:
+                    for pt in grid_h:
+                        pt["value"] = -pt["value"]
 
                 prod_h = []
                 if production_entity:

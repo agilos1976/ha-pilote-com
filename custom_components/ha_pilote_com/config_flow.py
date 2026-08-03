@@ -4,6 +4,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -23,6 +24,7 @@ from .const import (
     CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
     CONF_GRID_ENTITY,
+    CONF_GRID_IMPORT_POSITIVE,
     CONF_HA_TOKEN,
     CONF_HA_URL,
     CONF_PRODUCTION_ENTITY,
@@ -49,6 +51,8 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
     schema[vol.Required(CONF_GRID_ENTITY, default=d.get(CONF_GRID_ENTITY))] = EntitySelector(
         EntitySelectorConfig(domain="sensor", device_class="power")
     )
+
+    schema[vol.Required(CONF_GRID_IMPORT_POSITIVE, default=d.get(CONF_GRID_IMPORT_POSITIVE, True))] = BooleanSelector()
 
     bat = d.get(CONF_BATTERY_ENTITY)
     if bat:
