@@ -31,7 +31,6 @@ from .const import (
     COVERAGE_API_URL,
     DOMAIN,
     LIVE_API_URL,
-    LIVE_ENTITIES,
     LIVE_INTERVAL_SECONDS,
 )
 
@@ -346,22 +345,29 @@ async def async_setup_entry(
     latitude = hass.config.latitude
     longitude = hass.config.longitude
 
+    live_entity_ids = [grid_entity]
+    entity_config = {"grid": grid_entity}
+    if production_entity:
+        live_entity_ids.append(production_entity)
+        entity_config["pv"] = production_entity
+    if battery_entity:
+        live_entity_ids.append(battery_entity)
+        entity_config["batPower"] = battery_entity
+    if battery_soc_entity:
+        live_entity_ids.append(battery_soc_entity)
+        entity_config["soc"] = battery_soc_entity
+
     async def _send_live(_now=None):
         entities = {}
-        for entity_id in LIVE_ENTITIES:
+        for entity_id in live_entity_ids:
             state = hass.states.get(entity_id)
             if state is not None:
                 entities[entity_id] = str(state.state)
 
-        battery_soc = ""
-        if battery_soc_entity:
-            soc_state = hass.states.get(battery_soc_entity)
-            battery_soc = str(soc_state.state) if soc_state else ""
-
         payload = {
             "api_key": api_key,
             "entities": entities,
-            "battery_soc": battery_soc,
+            "entity_config": entity_config,
             "ha_url": ha_url,
             "ha_token": ha_token,
             "latitude": latitude,
