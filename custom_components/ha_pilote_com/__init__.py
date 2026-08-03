@@ -529,11 +529,15 @@ async def async_setup_entry(
                 s += timedelta(minutes=BUCKET_MINUTES)
 
             try:
+                imp_h = []
+                exp_h = []
+                bf_grid_unit = ""
                 if meter_import and meter_export:
                     imp_h = await _get_history(hass, start_utc, end_utc, meter_import, use_delta=True)
                     exp_h = await _get_history(hass, start_utc, end_utc, meter_export, use_delta=True)
-                    bf_grid_unit = "kWh"
-                else:
+                    if imp_h or exp_h:
+                        bf_grid_unit = "kWh"
+                if not imp_h and not exp_h:
                     grid_h = await _get_history(hass, start_utc, end_utc, grid_entity)
                     if not grid_import_positive:
                         for pt in grid_h:
@@ -546,8 +550,9 @@ async def async_setup_entry(
                 bf_prod_unit = ""
                 if meter_production:
                     prod_h = await _get_history(hass, start_utc, end_utc, meter_production, use_delta=True)
-                    bf_prod_unit = "kWh"
-                elif production_entity:
+                    if prod_h:
+                        bf_prod_unit = "kWh"
+                if not prod_h and production_entity:
                     prod_h = await _get_history(hass, start_utc, end_utc, production_entity)
                     prod_state = hass.states.get(production_entity)
                     bf_prod_unit = prod_state.attributes.get("unit_of_measurement", "") if prod_state else ""
@@ -559,14 +564,15 @@ async def async_setup_entry(
                 if meter_battery_charge and meter_battery_discharge:
                     ch_h = await _get_history(hass, start_utc, end_utc, meter_battery_charge, use_delta=True)
                     dis_h = await _get_history(hass, start_utc, end_utc, meter_battery_discharge, use_delta=True)
-                    if battery_charge_positive:
-                        add_h = ch_h
-                        out_h = dis_h
-                    else:
-                        add_h = dis_h
-                        out_h = ch_h
-                    bf_bat_unit = "kWh"
-                elif battery_entity:
+                    if ch_h or dis_h:
+                        if battery_charge_positive:
+                            add_h = ch_h
+                            out_h = dis_h
+                        else:
+                            add_h = dis_h
+                            out_h = ch_h
+                        bf_bat_unit = "kWh"
+                if not add_h and not out_h and battery_entity:
                     bat_h = await _get_history(hass, start_utc, end_utc, battery_entity)
                     add_h, out_h = _split_signed(bat_h)
                     bat_state = hass.states.get(battery_entity)
