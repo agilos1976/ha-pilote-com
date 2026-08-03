@@ -34,50 +34,56 @@ from .const import (
 
 def _user_schema(defaults: dict | None = None) -> vol.Schema:
     d = defaults or {}
-    return vol.Schema(
-        {
-            vol.Optional(
-                CONF_PRODUCTION_ENTITY,
-                default=d.get(CONF_PRODUCTION_ENTITY, ""),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-            vol.Required(
-                CONF_GRID_ENTITY,
-                default=d.get(CONF_GRID_ENTITY),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-            vol.Optional(
-                CONF_BATTERY_ENTITY,
-                default=d.get(CONF_BATTERY_ENTITY, ""),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-            vol.Optional(
-                CONF_BATTERY_SOC_ENTITY,
-                default=d.get(CONF_BATTERY_SOC_ENTITY, ""),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="battery")),
-            vol.Required(
-                CONF_UPDATE_INTERVAL,
-                default=d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-            ): NumberSelector(
-                NumberSelectorConfig(
-                    min=1,
-                    max=24,
-                    step=1,
-                    mode=NumberSelectorMode.BOX,
-                    unit_of_measurement="h",
-                ),
-            ),
-            vol.Required(
-                CONF_API_KEY,
-                default=d.get(CONF_API_KEY),
-            ): TextSelector(TextSelectorConfig(type="password")),
-            vol.Optional(
-                CONF_HA_URL,
-                default=d.get(CONF_HA_URL, ""),
-            ): TextSelector(TextSelectorConfig(type="url")),
-            vol.Optional(
-                CONF_HA_TOKEN,
-                default=d.get(CONF_HA_TOKEN, ""),
-            ): TextSelector(TextSelectorConfig(type="password")),
-        }
+    schema = {}
+
+    prod = d.get(CONF_PRODUCTION_ENTITY)
+    if prod:
+        schema[vol.Optional(CONF_PRODUCTION_ENTITY, default=prod)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="power")
+        )
+    else:
+        schema[vol.Optional(CONF_PRODUCTION_ENTITY)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="power")
+        )
+
+    schema[vol.Required(CONF_GRID_ENTITY, default=d.get(CONF_GRID_ENTITY))] = EntitySelector(
+        EntitySelectorConfig(domain="sensor", device_class="power")
     )
+
+    bat = d.get(CONF_BATTERY_ENTITY)
+    if bat:
+        schema[vol.Optional(CONF_BATTERY_ENTITY, default=bat)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="power")
+        )
+    else:
+        schema[vol.Optional(CONF_BATTERY_ENTITY)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="power")
+        )
+
+    soc = d.get(CONF_BATTERY_SOC_ENTITY)
+    if soc:
+        schema[vol.Optional(CONF_BATTERY_SOC_ENTITY, default=soc)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="battery")
+        )
+    else:
+        schema[vol.Optional(CONF_BATTERY_SOC_ENTITY)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="battery")
+        )
+
+    schema[vol.Required(CONF_UPDATE_INTERVAL, default=d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))] = NumberSelector(
+        NumberSelectorConfig(min=1, max=24, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="h")
+    )
+    schema[vol.Required(CONF_API_KEY, default=d.get(CONF_API_KEY))] = TextSelector(
+        TextSelectorConfig(type="password")
+    )
+    schema[vol.Optional(CONF_HA_URL, default=d.get(CONF_HA_URL, ""))] = TextSelector(
+        TextSelectorConfig(type="url")
+    )
+    schema[vol.Optional(CONF_HA_TOKEN, default=d.get(CONF_HA_TOKEN, ""))] = TextSelector(
+        TextSelectorConfig(type="password")
+    )
+
+    return vol.Schema(schema)
 
 
 class HaPiloteComOptionsFlow(OptionsFlow):
@@ -180,6 +186,8 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
+            for key in (CONF_PRODUCTION_ENTITY, CONF_BATTERY_ENTITY, CONF_BATTERY_SOC_ENTITY):
+                user_input.setdefault(key, "")
             await self.async_set_unique_id(user_input[CONF_API_KEY])
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
@@ -196,6 +204,8 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
+            for key in (CONF_PRODUCTION_ENTITY, CONF_BATTERY_ENTITY, CONF_BATTERY_SOC_ENTITY):
+                user_input.setdefault(key, "")
             return self.async_update_reload_and_abort(
                 self._get_reconfigure_entry(),
                 data=user_input,
