@@ -2,93 +2,79 @@
   "config": {
     "step": {
       "user": {
-        "title": "Pilote Solaire — Setup",
-        "description": "What type of installation do you have?",
-        "data": {
-          "profile": "Installation type"
-        }
-      },
-      "equipment": {
-        "title": "Pilote Solaire — Equipment",
-        "description": "Select the hardware you use. The plugin will automatically find the right sensors.",
-        "data": {
-          "brands": "Installed equipment"
-        }
-      },
-      "entities": {
-        "title": "Pilote Solaire — Detected sensors",
-        "description": "Review the automatically detected sensors. You can adjust them if needed.",
-        "data": {
-          "grid_entity": "Grid sensor",
-          "production_entity": "Solar production sensor",
-          "consumption_entity": "Consumption sensor",
-          "add_battery_entity": "Battery charge sensor",
-          "out_battery_entity": "Battery discharge sensor",
-          "soc_entity": "Battery level (%)"
-        },
-        "data_description": {
-          "grid_entity": "Grid power — positive = import, negative = export (e.g. sensor.whatwatt_go_power_in)",
-          "production_entity": "Power produced by your panels (e.g. sensor.fronius_power)",
-          "consumption_entity": "Total house consumption (optional, calculated if absent)",
-          "add_battery_entity": "Battery charging power (optional)",
-          "out_battery_entity": "Battery discharging power (optional)",
-          "soc_entity": "Battery state of charge in % (optional)"
-        }
-      },
-      "api": {
-        "title": "Pilote Solaire — Connection",
-        "description": "Enter your API key provided by Romande Dynamics.",
+        "title": "HA Pilote Com",
+        "description": "Set up automatic sending of your solar data to Romande Dynamics.\n\nPower sensors (W) are used for live display. Energy meters (kWh) are optional but provide more accurate historical curves.",
         "data": {
           "api_key": "API key",
-          "update_interval": "Send frequency"
+          "production_entity": "Solar production (W)",
+          "grid_entity": "Grid (W)",
+          "grid_import_positive": "Positive = grid import",
+          "battery_entity": "Battery (W)",
+          "battery_soc_entity": "Battery — state of charge (%)",
+          "meter_production": "Meter — Production (kWh)",
+          "meter_import": "Meter — Grid import (kWh)",
+          "meter_export": "Meter — Grid export (kWh)",
+          "meter_battery_charge": "Meter — Battery charge (kWh)",
+          "meter_battery_discharge": "Meter — Battery discharge (kWh)",
+          "battery_charge_positive": "Battery meters are correctly assigned",
+          "update_interval": "Update interval",
+          "ha_url": "Home Assistant URL",
+          "ha_token": "Home Assistant Token"
         },
         "data_description": {
-          "api_key": "Your personal API key (received by email)",
-          "update_interval": "Data sending frequency in minutes (15 min recommended)"
+          "api_key": "Your Romande Dynamics API key",
+          "production_entity": "Instantaneous PV power in watts — used for live display",
+          "grid_entity": "Instantaneous grid power — positive = import, negative = export",
+          "grid_import_positive": "Uncheck if your grid sensor is inverted (positive = export instead of import)",
+          "battery_entity": "Instantaneous battery power — positive = charge, negative = discharge",
+          "battery_soc_entity": "Battery state of charge percentage (0–100 %)",
+          "meter_production": "Cumulative kWh counter — more accurate than power for historical curves",
+          "meter_import": "Cumulative energy imported from the grid",
+          "meter_export": "Cumulative energy exported to the grid",
+          "meter_battery_charge": "Cumulative energy stored in the battery",
+          "meter_battery_discharge": "Cumulative energy discharged from the battery",
+          "battery_charge_positive": "Uncheck if your charge and discharge battery meters are swapped",
+          "update_interval": "Historical data sending frequency (in hours)",
+          "ha_url": "External URL (e.g. https://my-ha.duckdns.org) — for remote live display",
+          "ha_token": "Long-lived token for live via WebSocket"
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Pilote Solaire",
-        "description": "Modify your integration settings. Advanced fields (meters, polarity, HA) are optional.",
+        "title": "Reconfigure HA Pilote Com",
+        "description": "Power sensors (W) are used for live display. Energy meters (kWh) are optional but provide more accurate historical curves.",
         "data": {
-          "grid_entity": "Grid sensor",
-          "grid_import_positive": "Grid import = positive value",
-          "production_entity": "Solar production sensor",
-          "consumption_entity": "Consumption sensor",
-          "battery_entity": "Battery (single signed entity)",
-          "add_battery_entity": "Battery charge sensor",
-          "out_battery_entity": "Battery discharge sensor",
-          "soc_entity": "Battery level (%)",
-          "battery_charge_positive": "Battery charge = positive value",
-          "meter_production": "Production energy meter (kWh)",
-          "meter_import": "Import energy meter (kWh)",
-          "meter_export": "Export energy meter (kWh)",
-          "meter_battery_charge": "Battery charge energy meter (kWh)",
-          "meter_battery_discharge": "Battery discharge energy meter (kWh)",
-          "update_interval": "Send frequency",
           "api_key": "API key",
+          "production_entity": "Solar production (W)",
+          "grid_entity": "Grid (W)",
+          "grid_import_positive": "Positive = grid import",
+          "battery_entity": "Battery (W)",
+          "battery_soc_entity": "Battery — state of charge (%)",
+          "meter_production": "Meter — Production (kWh)",
+          "meter_import": "Meter — Grid import (kWh)",
+          "meter_export": "Meter — Grid export (kWh)",
+          "meter_battery_charge": "Meter — Battery charge (kWh)",
+          "meter_battery_discharge": "Meter — Battery discharge (kWh)",
+          "battery_charge_positive": "Battery meters are correctly assigned",
+          "update_interval": "Update interval",
           "ha_url": "Home Assistant URL",
-          "ha_token": "HA Token (Long-Lived Access Token)"
+          "ha_token": "Home Assistant Token"
         },
         "data_description": {
-          "grid_entity": "Grid power — positive = import, negative = export",
-          "grid_import_positive": "Uncheck if your grid sensor is inverted (positive = export)",
-          "production_entity": "Power produced by your panels",
-          "consumption_entity": "Total house consumption (optional)",
-          "battery_entity": "Alternative to separate charge/discharge — single entity with signed value (+ charge, - discharge)",
-          "add_battery_entity": "Battery charging power (optional)",
-          "out_battery_entity": "Battery discharging power (optional)",
-          "soc_entity": "Battery state of charge in % (optional)",
-          "battery_charge_positive": "Uncheck if your battery sensor is inverted",
-          "meter_production": "Cumulative kWh counter — takes priority over power sensor if set",
-          "meter_import": "Cumulative kWh grid import counter — takes priority over grid sensor if set",
-          "meter_export": "Cumulative kWh grid export counter — takes priority over grid sensor if set",
-          "meter_battery_charge": "Cumulative kWh battery charge counter",
-          "meter_battery_discharge": "Cumulative kWh battery discharge counter",
-          "update_interval": "Data sending frequency in minutes (15 min recommended)",
           "api_key": "Your Romande Dynamics API key",
-          "ha_url": "External HA URL (optional, for live API)",
-          "ha_token": "HA long-lived access token (optional, for live API)"
+          "production_entity": "Instantaneous PV power in watts — used for live display",
+          "grid_entity": "Instantaneous grid power — positive = import, negative = export",
+          "grid_import_positive": "Uncheck if your grid sensor is inverted (positive = export instead of import)",
+          "battery_entity": "Instantaneous battery power — positive = charge, negative = discharge",
+          "battery_soc_entity": "Battery state of charge percentage (0–100 %)",
+          "meter_production": "Cumulative kWh counter — more accurate than power for historical curves",
+          "meter_import": "Cumulative energy imported from the grid",
+          "meter_export": "Cumulative energy exported to the grid",
+          "meter_battery_charge": "Cumulative energy stored in the battery",
+          "meter_battery_discharge": "Cumulative energy discharged from the battery",
+          "battery_charge_positive": "Uncheck if your charge and discharge battery meters are swapped",
+          "update_interval": "Historical data sending frequency (in hours)",
+          "ha_url": "External URL (e.g. https://my-ha.duckdns.org) — for remote live display",
+          "ha_token": "Long-lived token for live via WebSocket"
         }
       }
     },
@@ -115,7 +101,7 @@
         "data_description": {
           "consumer_entity": "Consumer power sensor (e.g. EV charger, heat pump, pool…)",
           "consumer_name": "Name that will appear in the cockpit chart",
-          "consumer_category": "Consumer type for classification"
+          "consumer_category": "Device type for grouping in the cockpit"
         }
       }
     }
