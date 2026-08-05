@@ -254,7 +254,11 @@ async def async_setup_entry(
     meter_battery_charge = entry.data.get(CONF_METER_BATTERY_CHARGE, "")
     meter_battery_discharge = entry.data.get(CONF_METER_BATTERY_DISCHARGE, "")
     battery_charge_positive = entry.data.get(CONF_BATTERY_CHARGE_POSITIVE, True)
-    interval_hours = int(entry.data[CONF_UPDATE_INTERVAL])
+    interval_val = int(entry.data[CONF_UPDATE_INTERVAL])
+    if interval_val <= 24:
+        interval_td = timedelta(hours=interval_val)
+    else:
+        interval_td = timedelta(minutes=interval_val)
     api_key = entry.data[CONF_API_KEY]
 
     async def _send_data(_now=None):
@@ -264,7 +268,7 @@ async def async_setup_entry(
             return
 
         now = dt_util.utcnow()
-        start = _bucket_start(now - timedelta(hours=interval_hours))
+        start = _bucket_start(now - interval_td)
 
         import_history = []
         export_history = []
@@ -653,7 +657,7 @@ async def async_setup_entry(
     unsub_history = async_track_time_interval(
         hass,
         _send_data,
-        timedelta(hours=interval_hours),
+        interval_td,
     )
 
     unsub_live = async_track_time_interval(

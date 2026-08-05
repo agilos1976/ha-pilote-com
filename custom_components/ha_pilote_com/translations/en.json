@@ -34,7 +34,7 @@
           "meter_battery_charge": "Cumulative energy stored in the battery",
           "meter_battery_discharge": "Cumulative energy discharged from the battery",
           "battery_charge_positive": "Uncheck if your charge and discharge battery meters are swapped",
-          "update_interval": "Historical data sending frequency (in hours)",
+          "update_interval": "Data sending frequency in minutes (15 min recommended)",
           "ha_url": "External URL (e.g. https://my-ha.duckdns.org) — for remote live display",
           "ha_token": "Long-lived token for live via WebSocket"
         }
@@ -72,7 +72,7 @@
           "meter_battery_charge": "Cumulative energy stored in the battery",
           "meter_battery_discharge": "Cumulative energy discharged from the battery",
           "battery_charge_positive": "Uncheck if your charge and discharge battery meters are swapped",
-          "update_interval": "Historical data sending frequency (in hours)",
+          "update_interval": "Data sending frequency in minutes (15 min recommended)",
           "ha_url": "External URL (e.g. https://my-ha.duckdns.org) — for remote live display",
           "ha_token": "Long-lived token for live via WebSocket"
         }

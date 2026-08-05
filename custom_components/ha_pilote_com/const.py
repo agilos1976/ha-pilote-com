@@ -16,7 +16,7 @@ CONF_BATTERY_CHARGE_POSITIVE = "battery_charge_positive"
 CONF_HA_URL = "ha_url"
 CONF_HA_TOKEN = "ha_token"
 CONF_CONSUMERS = "consumers"
-DEFAULT_UPDATE_INTERVAL = 1
+DEFAULT_UPDATE_INTERVAL = 15
 
 API_URL = "https://carrard.ch/pilote/api/post_data_user.php"
 COVERAGE_API_URL = "https://carrard.ch/pilote/api/get_coverage.php"

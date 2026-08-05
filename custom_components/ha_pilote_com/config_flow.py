@@ -133,7 +133,7 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
     schema[vol.Required(CONF_BATTERY_CHARGE_POSITIVE, default=d.get(CONF_BATTERY_CHARGE_POSITIVE, True))] = BooleanSelector()
 
     schema[vol.Required(CONF_UPDATE_INTERVAL, default=d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))] = NumberSelector(
-        NumberSelectorConfig(min=1, max=24, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="h")
+        NumberSelectorConfig(min=5, max=1440, step=5, mode=NumberSelectorMode.BOX, unit_of_measurement="min")
     )
     schema[vol.Required(CONF_API_KEY, default=d.get(CONF_API_KEY))] = TextSelector(
         TextSelectorConfig(type="password")

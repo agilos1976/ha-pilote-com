@@ -34,7 +34,7 @@
           "meter_battery_charge": "Compteur cumulé d'énergie stockée dans la batterie",
           "meter_battery_discharge": "Compteur cumulé d'énergie restituée par la batterie",
           "battery_charge_positive": "Décochez si vos compteurs charge et décharge batterie sont inversés",
-          "update_interval": "Fréquence d'envoi des données historiques (en heures)",
+          "update_interval": "Fréquence d'envoi des données en minutes (15 min recommandé)",
           "ha_url": "URL externe (ex: https://mon-ha.duckdns.org) — pour le live à distance",
           "ha_token": "Token longue durée pour le live via WebSocket"
         }
@@ -72,7 +72,7 @@
           "meter_battery_charge": "Compteur cumulé d'énergie stockée dans la batterie",
           "meter_battery_discharge": "Compteur cumulé d'énergie restituée par la batterie",
           "battery_charge_positive": "Décochez si vos compteurs charge et décharge batterie sont inversés",
-          "update_interval": "Fréquence d'envoi des données historiques (en heures)",
+          "update_interval": "Fréquence d'envoi des données en minutes (15 min recommandé)",
           "ha_url": "URL externe (ex: https://mon-ha.duckdns.org) — pour le live à distance",
           "ha_token": "Token longue durée pour le live via WebSocket"
         }
