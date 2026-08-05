@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+import asyncio
+
 import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
@@ -14,17 +16,34 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     API_URL,
+    BACKFILL_DAYS,
+    BACKFILL_INTERVAL_HOURS,
+    BACKFILL_MAX_RETRIES,
     CONF_ADD_BATTERY_ENTITY,
     CONF_API_KEY,
+    CONF_BATTERY_CHARGE_POSITIVE,
+    CONF_BATTERY_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
     CONF_CONSUMPTION_ENTITY,
     CONF_GRID_ENTITY,
+    CONF_GRID_IMPORT_POSITIVE,
+    CONF_HA_TOKEN,
+    CONF_HA_URL,
+    CONF_METER_BATTERY_CHARGE,
+    CONF_METER_BATTERY_DISCHARGE,
+    CONF_METER_EXPORT,
+    CONF_METER_IMPORT,
+    CONF_METER_PRODUCTION,
     CONF_OUT_BATTERY_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_PROFILE,
     CONF_SOC_ENTITY,
     CONF_UPDATE_INTERVAL,
+    COVERAGE_API_URL,
     DOMAIN,
+    LIVE_API_URL,
+    LIVE_INTERVAL_SECONDS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,7 +58,6 @@ def _bucket_start(dt: datetime) -> datetime:
 
 
 def _aggregate_15min(states: list, period_start: datetime, period_end: datetime) -> list[dict]:
-    """Moyenne pondérée par bucket — pour capteurs de puissance (W, kW)."""
     samples = []
     for state in states:
         if state.state in ("unavailable", "unknown"):
@@ -105,8 +123,8 @@ def _aggregate_15min(states: list, period_start: datetime, period_end: datetime)
     return result
 
 
-def _aggregate_15min_energy(states: list, period_start: datetime, period_end: datetime) -> list[dict]:
-    """Delta par bucket — pour compteurs cumulatifs (kWh, Wh)."""
+def _delta_15min(states: list, period_start: datetime, period_end: datetime) -> list[dict]:
+    """Calculate energy deltas per 15-min bucket for cumulative counters (total_increasing)."""
     samples = []
     for state in states:
         if state.state in ("unavailable", "unknown"):
@@ -115,6 +133,8 @@ def _aggregate_15min_energy(states: list, period_start: datetime, period_end: da
             value = float(state.state)
         except ValueError:
             continue
+        if value < 0.001:
+            continue
         samples.append((state.last_updated, value))
 
     if not samples:
@@ -122,7 +142,7 @@ def _aggregate_15min_energy(states: list, period_start: datetime, period_end: da
 
     samples.sort(key=lambda s: s[0])
 
-    def _last_val_at(t):
+    def value_at(t):
         v = None
         for ts, val in samples:
             if ts <= t:
@@ -135,42 +155,38 @@ def _aggregate_15min_energy(states: list, period_start: datetime, period_end: da
     bucket_dt = _bucket_start(period_start)
     while bucket_dt < period_end:
         bucket_end = bucket_dt + timedelta(minutes=BUCKET_MINUTES)
-        vs = _last_val_at(bucket_dt)
-        ve = _last_val_at(bucket_end)
-        if vs is not None and ve is not None:
-            delta = round(max(0, ve - vs), 5)
+        v_start = value_at(bucket_dt)
+        v_end = value_at(bucket_end)
+        if v_start is not None and v_end is not None:
+            delta = v_end - v_start
+            if delta < 0:
+                delta = 0
             result.append({
                 "timestamp": bucket_dt.isoformat(),
-                "value": delta,
+                "value": round(delta, 5),
             })
         bucket_dt += timedelta(minutes=BUCKET_MINUTES)
 
     return result
 
 
-def _split_grid(grid_history: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Sépare l'historique grid en import (positif) et export (négatif -> abs)."""
-    import_history = []
-    export_history = []
-    for point in grid_history:
+def _split_signed(history: list[dict]) -> tuple[list[dict], list[dict]]:
+    positive = []
+    negative = []
+    for point in history:
         ts = point["timestamp"]
         val = point["value"]
         if val >= 0:
-            import_history.append({"timestamp": ts, "value": val})
-            export_history.append({"timestamp": ts, "value": 0.0})
+            positive.append({"timestamp": ts, "value": val})
+            negative.append({"timestamp": ts, "value": 0.0})
         else:
-            import_history.append({"timestamp": ts, "value": 0.0})
-            export_history.append({"timestamp": ts, "value": abs(val)})
-    return import_history, export_history
+            positive.append({"timestamp": ts, "value": 0.0})
+            negative.append({"timestamp": ts, "value": abs(val)})
+    return positive, negative
 
 
-def _empty_history() -> list[dict]:
-    return []
-
-
-async def _get_history(hass, start, now, entity_id, unit=""):
-    is_energy = unit.lower() in ("kwh", "wh")
-    query_start = start - timedelta(minutes=BUCKET_MINUTES) if is_energy else start
+async def _get_history(hass, start, now, entity_id, use_delta=False):
+    query_start = start - timedelta(minutes=BUCKET_MINUTES) if use_delta else start
     states = await get_instance(hass).async_add_executor_job(
         state_changes_during_period,
         hass,
@@ -179,101 +195,204 @@ async def _get_history(hass, start, now, entity_id, unit=""):
         entity_id,
     )
     raw = states.get(entity_id, [])
-    if is_energy:
-        return _aggregate_15min_energy(raw, start, now)
+    if use_delta:
+        return _delta_15min(raw, start, now)
     return _aggregate_15min(raw, start, now)
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _detect_counter(hass, entity_id, name):
+    """Detect if entity is a cumulative counter. Result is cached in hass.data."""
+    cache = hass.data.setdefault(DOMAIN, {}).setdefault("counter_cache", {})
+
+    c_state = hass.states.get(entity_id)
+    if not c_state:
+        if cache.get(entity_id):
+            _LOGGER.warning("Consumer %s: entity unavailable, using cached counter=True", name)
+            return True, "", "", ""
+        return None, "", "", ""
+
+    sc = c_state.attributes.get("state_class", "")
+    dc = c_state.attributes.get("device_class", "")
+    unit = c_state.attributes.get("unit_of_measurement", "")
+
+    if not unit and not sc and not dc:
+        if cache.get(entity_id):
+            _LOGGER.warning("Consumer %s: attributes empty, using cached counter=True", name)
+            return True, sc, dc, unit
+        _LOGGER.warning("Consumer %s: attributes not loaded, skipping", name)
+        return None, sc, dc, unit
+
+    is_counter = (
+        sc in ("total_increasing", "total")
+        or dc == "energy"
+        or unit.lower().strip() in ("kwh", "wh")
+    )
+
+    if not is_counter and cache.get(entity_id):
+        _LOGGER.warning(
+            "Consumer %s: attributes say not counter (sc=%r dc=%r unit=%r) but cache says counter — forcing delta",
+            name, sc, dc, unit,
+        )
+        is_counter = True
+
+    if is_counter:
+        cache[entity_id] = True
+
+    return is_counter, sc, dc, unit
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: HaPiloteComConfigEntry
 ) -> bool:
+    is_legacy = CONF_PROFILE not in entry.data
+
     grid_entity = entry.data[CONF_GRID_ENTITY]
-    production_entity = entry.data.get(CONF_PRODUCTION_ENTITY, "")
-    consumption_entity = entry.data.get(CONF_CONSUMPTION_ENTITY, "")
-    add_battery_entity = entry.data.get(CONF_ADD_BATTERY_ENTITY, "")
-    out_battery_entity = entry.data.get(CONF_OUT_BATTERY_ENTITY, "")
-    soc_entity = entry.data.get(CONF_SOC_ENTITY, "")
     api_key = entry.data[CONF_API_KEY]
 
-    interval_val = int(entry.data[CONF_UPDATE_INTERVAL])
-    is_legacy = CONF_PROFILE not in entry.data
-    if is_legacy and interval_val <= 24:
-        interval_td = timedelta(hours=interval_val)
-        history_td = timedelta(hours=interval_val)
+    if is_legacy:
+        production_entity = entry.data.get(CONF_PRODUCTION_ENTITY, "")
+        consumption_entity = ""
+        grid_import_positive = entry.data.get(CONF_GRID_IMPORT_POSITIVE, True)
+        battery_entity = entry.data.get(CONF_BATTERY_ENTITY, "")
+        battery_soc_entity = entry.data.get(CONF_BATTERY_SOC_ENTITY, "")
+        add_battery_entity = ""
+        out_battery_entity = ""
+        meter_production = entry.data.get(CONF_METER_PRODUCTION, "")
+        meter_import = entry.data.get(CONF_METER_IMPORT, "")
+        meter_export = entry.data.get(CONF_METER_EXPORT, "")
+        meter_battery_charge = entry.data.get(CONF_METER_BATTERY_CHARGE, "")
+        meter_battery_discharge = entry.data.get(CONF_METER_BATTERY_DISCHARGE, "")
+        battery_charge_positive = entry.data.get(CONF_BATTERY_CHARGE_POSITIVE, True)
+        ha_url = entry.data.get(CONF_HA_URL, "")
+        ha_token = entry.data.get(CONF_HA_TOKEN, "")
+        interval_val = int(entry.data[CONF_UPDATE_INTERVAL])
+        if interval_val <= 24:
+            interval_td = timedelta(hours=interval_val)
+        else:
+            interval_td = timedelta(minutes=interval_val)
     else:
+        production_entity = entry.data.get(CONF_PRODUCTION_ENTITY, "")
+        consumption_entity = entry.data.get(CONF_CONSUMPTION_ENTITY, "")
+        grid_import_positive = True
+        battery_entity = ""
+        battery_soc_entity = entry.data.get(CONF_SOC_ENTITY, "")
+        add_battery_entity = entry.data.get(CONF_ADD_BATTERY_ENTITY, "")
+        out_battery_entity = entry.data.get(CONF_OUT_BATTERY_ENTITY, "")
+        meter_production = ""
+        meter_import = ""
+        meter_export = ""
+        meter_battery_charge = ""
+        meter_battery_discharge = ""
+        battery_charge_positive = True
+        ha_url = ""
+        ha_token = ""
+        interval_val = int(entry.data[CONF_UPDATE_INTERVAL])
         interval_td = timedelta(minutes=interval_val)
-        history_td = timedelta(minutes=interval_val)
 
     async def _send_data(_now=None):
         grid_state = hass.states.get(grid_entity)
         if not grid_state:
-            _LOGGER.warning("Grid entity %s not available", grid_entity)
+            _LOGGER.warning("Grid entity not available")
             return
 
-        prod_state = hass.states.get(production_entity) if production_entity else None
-        conso_state = hass.states.get(consumption_entity) if consumption_entity else None
-        add_bat_state = hass.states.get(add_battery_entity) if add_battery_entity else None
-        out_bat_state = hass.states.get(out_battery_entity) if out_battery_entity else None
-
         now = dt_util.utcnow()
-        start = _bucket_start(now - history_td)
+        start = _bucket_start(now - interval_td)
 
-        grid_unit = grid_state.attributes.get("unit_of_measurement", "")
+        import_history = []
+        export_history = []
+        grid_unit = ""
+        if meter_import and meter_export:
+            import_history = await _get_history(hass, start, now, meter_import, use_delta=True)
+            export_history = await _get_history(hass, start, now, meter_export, use_delta=True)
+            if import_history or export_history:
+                grid_unit = "kWh"
+        if not import_history and not export_history:
+            grid_history = await _get_history(hass, start, now, grid_entity)
+            if not grid_import_positive:
+                for pt in grid_history:
+                    pt["value"] = -pt["value"]
+            import_history, export_history = _split_signed(grid_history)
+            grid_unit = grid_state.attributes.get("unit_of_measurement", "")
 
-        grid_history = await _get_history(hass, start, now, grid_entity, grid_unit)
-        import_history, export_history = _split_grid(grid_history)
+        prod_history = []
+        prod_unit = ""
+        if meter_production:
+            prod_history = await _get_history(hass, start, now, meter_production, use_delta=True)
+            if prod_history:
+                prod_unit = "kWh"
+        if not prod_history and production_entity:
+            prod_history = await _get_history(hass, start, now, production_entity)
+            prod_state = hass.states.get(production_entity)
+            prod_unit = prod_state.attributes.get("unit_of_measurement", "") if prod_state else ""
 
-        if prod_state:
-            prod_unit = prod_state.attributes.get("unit_of_measurement", "")
-            prod_history = await _get_history(hass, start, now, production_entity, prod_unit)
-        else:
-            prod_history = _empty_history()
-            prod_unit = ""
+        add_bat_history = []
+        out_bat_history = []
+        bat_unit = ""
+        soc_history = []
+        if meter_battery_charge and meter_battery_discharge:
+            ch_history = await _get_history(hass, start, now, meter_battery_charge, use_delta=True)
+            dis_history = await _get_history(hass, start, now, meter_battery_discharge, use_delta=True)
+            if ch_history or dis_history:
+                if battery_charge_positive:
+                    add_bat_history = ch_history
+                    out_bat_history = dis_history
+                else:
+                    add_bat_history = dis_history
+                    out_bat_history = ch_history
+                bat_unit = "kWh"
+        if not add_bat_history and not out_bat_history:
+            if add_battery_entity:
+                add_bat_history = await _get_history(hass, start, now, add_battery_entity)
+                s = hass.states.get(add_battery_entity)
+                bat_unit = s.attributes.get("unit_of_measurement", "") if s else ""
+            if out_battery_entity:
+                out_bat_history = await _get_history(hass, start, now, out_battery_entity)
+                if not bat_unit:
+                    s = hass.states.get(out_battery_entity)
+                    bat_unit = s.attributes.get("unit_of_measurement", "") if s else ""
+        if not add_bat_history and not out_bat_history and battery_entity:
+            bat_history = await _get_history(hass, start, now, battery_entity)
+            add_bat_history, out_bat_history = _split_signed(bat_history)
+            bat_state = hass.states.get(battery_entity)
+            bat_unit = bat_state.attributes.get("unit_of_measurement", "") if bat_state else ""
+        if battery_soc_entity:
+            soc_history = await _get_history(hass, start, now, battery_soc_entity)
 
-        if conso_state:
-            conso_unit = conso_state.attributes.get("unit_of_measurement", "")
-            conso_history = await _get_history(hass, start, now, consumption_entity, conso_unit)
-        else:
-            conso_history = _empty_history()
-            conso_unit = ""
-
-        if add_bat_state:
-            add_bat_unit = add_bat_state.attributes.get("unit_of_measurement", "")
-            add_bat_history = await _get_history(hass, start, now, add_battery_entity, add_bat_unit)
-        else:
-            add_bat_history = _empty_history()
-            add_bat_unit = ""
-
-        if out_bat_state:
-            out_bat_unit = out_bat_state.attributes.get("unit_of_measurement", "")
-            out_bat_history = await _get_history(hass, start, now, out_battery_entity, out_bat_unit)
-        else:
-            out_bat_history = _empty_history()
-            out_bat_unit = ""
+        consumption_history = []
+        consumption_unit = ""
+        if consumption_entity:
+            conso_state = hass.states.get(consumption_entity)
+            if conso_state:
+                consumption_unit = conso_state.attributes.get("unit_of_measurement", "")
+                consumption_history = await _get_history(hass, start, now, consumption_entity)
 
         payload = {
             "api_key": api_key,
             "production_entity": production_entity,
-            "production_unit": prod_state.attributes.get("unit_of_measurement", "") if prod_state else "",
+            "grid_entity": grid_entity,
+            "battery_entity": battery_entity or add_battery_entity,
+            "battery_soc_entity": battery_soc_entity,
+            "production_unit": prod_unit,
             "production_history": prod_history,
-            "consumption_entity": consumption_entity,
-            "consumption_unit": conso_state.attributes.get("unit_of_measurement", "") if conso_state else "",
-            "consumption_history": conso_history,
             "import_unit": grid_unit,
             "import_history": import_history,
             "export_unit": grid_unit,
             "export_history": export_history,
-            "add_battery_unit": add_bat_unit,
+            "add_battery_unit": bat_unit,
             "add_battery_history": add_bat_history,
-            "out_battery_unit": out_bat_unit,
+            "out_battery_unit": bat_unit,
             "out_battery_history": out_bat_history,
+            "soc_history": soc_history,
         }
 
-        if soc_entity:
-            soc_state = hass.states.get(soc_entity)
-            if soc_state:
-                soc_history = await _get_history(hass, start, now, soc_entity)
-                payload["soc_history"] = soc_history
+        if consumption_entity:
+            payload["consumption_entity"] = consumption_entity
+            payload["consumption_unit"] = consumption_unit
+            payload["consumption_history"] = consumption_history
 
         consumers = entry.options.get(CONF_CONSUMERS, [])
         if consumers:
@@ -281,16 +400,21 @@ async def async_setup_entry(
             for consumer in consumers:
                 entity_id = consumer["entity"]
                 name = consumer["name"]
-                c_state = hass.states.get(entity_id)
-                if not c_state:
-                    _LOGGER.debug("Consumer entity %s not available", entity_id)
+                is_counter, sc, dc, unit = _detect_counter(hass, entity_id, name)
+                if is_counter is None:
                     continue
-                c_unit = c_state.attributes.get("unit_of_measurement", "")
-                c_history = await _get_history(hass, start, now, entity_id, c_unit)
+                c_history = await _get_history(hass, start, now, entity_id, use_delta=is_counter)
+                _LOGGER.warning(
+                    "Consumer %s: sc=%r dc=%r unit=%r counter=%s pts=%d first=%s",
+                    name, sc, dc, unit, is_counter, len(c_history),
+                    c_history[0]["value"] if c_history else "N/A",
+                )
                 consumers_data.append({
                     "name": name,
                     "entity": entity_id,
-                    "unit": c_unit,
+                    "unit": unit,
+                    "state_class": sc,
+                    "category": consumer.get("category", "other"),
                     "history": c_history,
                 })
             if consumers_data:
@@ -304,12 +428,11 @@ async def async_setup_entry(
                     if resp.status == 200:
                         n_consumers = len(payload.get("consumers", []))
                         _LOGGER.debug(
-                            "History sent: %d prod, %d conso, %d grid, %d addBat, %d outBat, %d consumers",
+                            "History sent: %d prod, %d imp, %d exp, %d bat, %d consumers",
                             len(prod_history),
-                            len(conso_history),
-                            len(grid_history),
-                            len(add_bat_history),
-                            len(out_bat_history),
+                            len(import_history),
+                            len(export_history),
+                            len(add_bat_history) + len(out_bat_history),
                             n_consumers,
                         )
                     else:
@@ -318,22 +441,334 @@ async def async_setup_entry(
         except aiohttp.ClientError as err:
             _LOGGER.error("Failed to send data: %s", err)
 
-    unsub = async_track_time_interval(
+    latitude = hass.config.latitude
+    longitude = hass.config.longitude
+
+    live_entity_ids = [grid_entity]
+    entity_config = {"grid": grid_entity}
+    if production_entity:
+        live_entity_ids.append(production_entity)
+        entity_config["pv"] = production_entity
+    if battery_entity:
+        live_entity_ids.append(battery_entity)
+        entity_config["batPower"] = battery_entity
+    if add_battery_entity:
+        live_entity_ids.append(add_battery_entity)
+        entity_config["batCharge"] = add_battery_entity
+    if out_battery_entity:
+        live_entity_ids.append(out_battery_entity)
+        entity_config["batDischarge"] = out_battery_entity
+    if battery_soc_entity:
+        live_entity_ids.append(battery_soc_entity)
+        entity_config["soc"] = battery_soc_entity
+    if consumption_entity:
+        live_entity_ids.append(consumption_entity)
+        entity_config["consumption"] = consumption_entity
+
+    async def _send_live(_now=None):
+        entities = {}
+        for entity_id in live_entity_ids:
+            state = hass.states.get(entity_id)
+            if state is not None:
+                entities[entity_id] = str(state.state)
+
+        payload = {
+            "api_key": api_key,
+            "entities": entities,
+            "entity_config": entity_config,
+            "grid_import_positive": grid_import_positive,
+            "ha_url": ha_url,
+            "ha_token": ha_token,
+            "latitude": latitude,
+            "longitude": longitude,
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    LIVE_API_URL, json=payload, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status != 200:
+                        _LOGGER.warning("Live API error %s", resp.status)
+        except aiohttp.ClientError:
+            pass
+
+    async def _backfill(_now=None):
+        """Combler les trous des derniers jours depuis le recorder HA."""
+        if DOMAIN not in hass.data:
+            hass.data[DOMAIN] = {}
+        failures = hass.data[DOMAIN].setdefault("backfill_failures", {})
+
+        now = dt_util.utcnow()
+        tz = dt_util.get_time_zone("Europe/Zurich")
+        start = _bucket_start(now - timedelta(days=BACKFILL_DAYS))
+
+        now_local = now.astimezone(tz)
+        start_local = start.astimezone(tz)
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    COVERAGE_API_URL,
+                    params={
+                        "api_key": api_key,
+                        "from": start_local.strftime("%Y-%m-%d %H:%M:%S"),
+                        "to": now_local.strftime("%Y-%m-%d %H:%M:%S"),
+                    },
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as resp:
+                    if resp.status != 200:
+                        _LOGGER.warning("Coverage API error: %s", resp.status)
+                        return
+                    coverage = await resp.json()
+        except aiohttp.ClientError as err:
+            _LOGGER.warning("Coverage API unreachable: %s", err)
+            return
+
+        existing = set(coverage.get("slots", []))
+        consumer_existing = coverage.get("consumer_slots", {})
+
+        expected = set()
+        bucket = _bucket_start(start_local.replace(tzinfo=None))
+        current = _bucket_start(now_local.replace(tzinfo=None))
+        while bucket < current:
+            expected.add(bucket.strftime("%Y-%m-%d %H:%M:%S"))
+            bucket += timedelta(minutes=BUCKET_MINUTES)
+
+        missing = expected - existing
+
+        consumers = entry.options.get(CONF_CONSUMERS, [])
+        for consumer in consumers:
+            c_name = consumer["name"]
+            c_existing = set(consumer_existing.get(c_name, []))
+            c_missing = expected - c_existing
+            if c_missing:
+                _LOGGER.warning(
+                    "Backfill: consommateur '%s' manque %d slots",
+                    c_name, len(c_missing),
+                )
+            missing = missing | c_missing
+
+        if not missing:
+            _LOGGER.warning("Backfill: aucun trou détecté")
+            return
+
+        actionable = sorted(
+            s for s in missing if failures.get(s, 0) < BACKFILL_MAX_RETRIES
+        )
+        if not actionable:
+            _LOGGER.warning("Backfill: tous les trous ont atteint le max de tentatives")
+            return
+
+        _LOGGER.warning("Backfill: %d trous, %d à traiter", len(missing), len(actionable))
+
+        raw_ranges = []
+        r_start = None
+        r_end = None
+        for slot_str in actionable:
+            slot_dt = datetime.strptime(slot_str, "%Y-%m-%d %H:%M:%S")
+            if r_start is None:
+                r_start = slot_dt
+                r_end = slot_dt + timedelta(minutes=BUCKET_MINUTES)
+            elif slot_dt == r_end:
+                r_end = slot_dt + timedelta(minutes=BUCKET_MINUTES)
+            else:
+                raw_ranges.append((r_start, r_end))
+                r_start = slot_dt
+                r_end = slot_dt + timedelta(minutes=BUCKET_MINUTES)
+        if r_start:
+            raw_ranges.append((r_start, r_end))
+
+        max_chunk = timedelta(hours=24)
+        ranges = []
+        for r_s, r_e in raw_ranges:
+            while r_s < r_e:
+                chunk_end = min(r_s + max_chunk, r_e)
+                ranges.append((r_s, chunk_end))
+                r_s = chunk_end
+
+        _LOGGER.warning("Backfill: %d tranches à envoyer", len(ranges))
+
+        for idx, (r_start, r_end) in enumerate(ranges):
+            if idx > 0:
+                await asyncio.sleep(5)
+            start_utc = r_start.replace(tzinfo=tz).astimezone(dt_util.UTC)
+            end_utc = r_end.replace(tzinfo=tz).astimezone(dt_util.UTC)
+
+            range_slots = []
+            s = r_start
+            while s < r_end:
+                range_slots.append(s.strftime("%Y-%m-%d %H:%M:%S"))
+                s += timedelta(minutes=BUCKET_MINUTES)
+
+            try:
+                imp_h = []
+                exp_h = []
+                bf_grid_unit = ""
+                if meter_import and meter_export:
+                    imp_h = await _get_history(hass, start_utc, end_utc, meter_import, use_delta=True)
+                    exp_h = await _get_history(hass, start_utc, end_utc, meter_export, use_delta=True)
+                    if imp_h or exp_h:
+                        bf_grid_unit = "kWh"
+                if not imp_h and not exp_h:
+                    grid_h = await _get_history(hass, start_utc, end_utc, grid_entity)
+                    if not grid_import_positive:
+                        for pt in grid_h:
+                            pt["value"] = -pt["value"]
+                    imp_h, exp_h = _split_signed(grid_h)
+                    grid_state = hass.states.get(grid_entity)
+                    bf_grid_unit = grid_state.attributes.get("unit_of_measurement", "") if grid_state else ""
+
+                prod_h = []
+                bf_prod_unit = ""
+                if meter_production:
+                    prod_h = await _get_history(hass, start_utc, end_utc, meter_production, use_delta=True)
+                    if prod_h:
+                        bf_prod_unit = "kWh"
+                if not prod_h and production_entity:
+                    prod_h = await _get_history(hass, start_utc, end_utc, production_entity)
+                    prod_state = hass.states.get(production_entity)
+                    bf_prod_unit = prod_state.attributes.get("unit_of_measurement", "") if prod_state else ""
+
+                add_h = []
+                out_h = []
+                bf_bat_unit = ""
+                soc_h = []
+                if meter_battery_charge and meter_battery_discharge:
+                    ch_h = await _get_history(hass, start_utc, end_utc, meter_battery_charge, use_delta=True)
+                    dis_h = await _get_history(hass, start_utc, end_utc, meter_battery_discharge, use_delta=True)
+                    if ch_h or dis_h:
+                        if battery_charge_positive:
+                            add_h = ch_h
+                            out_h = dis_h
+                        else:
+                            add_h = dis_h
+                            out_h = ch_h
+                        bf_bat_unit = "kWh"
+                if not add_h and not out_h:
+                    if add_battery_entity:
+                        add_h = await _get_history(hass, start_utc, end_utc, add_battery_entity)
+                        s = hass.states.get(add_battery_entity)
+                        bf_bat_unit = s.attributes.get("unit_of_measurement", "") if s else ""
+                    if out_battery_entity:
+                        out_h = await _get_history(hass, start_utc, end_utc, out_battery_entity)
+                        if not bf_bat_unit:
+                            s = hass.states.get(out_battery_entity)
+                            bf_bat_unit = s.attributes.get("unit_of_measurement", "") if s else ""
+                if not add_h and not out_h and battery_entity:
+                    bat_h = await _get_history(hass, start_utc, end_utc, battery_entity)
+                    add_h, out_h = _split_signed(bat_h)
+                    bat_state = hass.states.get(battery_entity)
+                    bf_bat_unit = bat_state.attributes.get("unit_of_measurement", "") if bat_state else ""
+                if battery_soc_entity:
+                    soc_h = await _get_history(hass, start_utc, end_utc, battery_soc_entity)
+
+                bf_conso_h = []
+                bf_conso_unit = ""
+                if consumption_entity:
+                    conso_st = hass.states.get(consumption_entity)
+                    if conso_st:
+                        bf_conso_unit = conso_st.attributes.get("unit_of_measurement", "")
+                        bf_conso_h = await _get_history(hass, start_utc, end_utc, consumption_entity)
+
+                if not imp_h and not exp_h:
+                    for sl in range_slots:
+                        failures[sl] = failures.get(sl, 0) + 1
+                    _LOGGER.warning("Backfill: pas de données recorder pour %s→%s", r_start, r_end)
+                    continue
+
+                payload = {
+                    "api_key": api_key,
+                    "production_entity": production_entity,
+                    "grid_entity": grid_entity,
+                    "battery_entity": battery_entity or add_battery_entity,
+                    "battery_soc_entity": battery_soc_entity,
+                    "production_unit": bf_prod_unit,
+                    "production_history": prod_h,
+                    "import_unit": bf_grid_unit,
+                    "import_history": imp_h,
+                    "export_unit": bf_grid_unit,
+                    "export_history": exp_h,
+                    "add_battery_unit": bf_bat_unit,
+                    "add_battery_history": add_h,
+                    "out_battery_unit": bf_bat_unit,
+                    "out_battery_history": out_h,
+                    "soc_history": soc_h,
+                }
+
+                if consumption_entity:
+                    payload["consumption_entity"] = consumption_entity
+                    payload["consumption_unit"] = bf_conso_unit
+                    payload["consumption_history"] = bf_conso_h
+
+                consumers = entry.options.get(CONF_CONSUMERS, [])
+                if consumers:
+                    c_data = []
+                    for consumer in consumers:
+                        eid = consumer["entity"]
+                        c_name = consumer["name"]
+                        is_ctr, sc, dc, c_unit = _detect_counter(hass, eid, c_name)
+                        if is_ctr is None:
+                            continue
+                        c_h = await _get_history(hass, start_utc, end_utc, eid, use_delta=is_ctr)
+                        c_data.append({
+                            "name": c_name,
+                            "entity": eid,
+                            "unit": c_unit,
+                            "state_class": sc,
+                            "category": consumer.get("category", "other"),
+                            "history": c_h,
+                        })
+                    if c_data:
+                        payload["consumers"] = c_data
+
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        API_URL, json=payload, timeout=aiohttp.ClientTimeout(total=60)
+                    ) as resp:
+                        if resp.status == 200:
+                            _LOGGER.warning(
+                                "Backfill OK: %s → %s (%d points)",
+                                r_start, r_end, len(prod_h),
+                            )
+                        else:
+                            body = await resp.text()
+                            _LOGGER.error("Backfill API error %s: %s", resp.status, body)
+
+            except Exception as err:
+                _LOGGER.error("Backfill error %s→%s: %s", r_start, r_end, err)
+
+    unsub_history = async_track_time_interval(
         hass,
         _send_data,
         interval_td,
     )
 
-    entry.async_on_unload(unsub)
+    unsub_live = async_track_time_interval(
+        hass,
+        _send_live,
+        timedelta(seconds=LIVE_INTERVAL_SECONDS),
+    )
+
+    unsub_backfill = async_track_time_interval(
+        hass,
+        _backfill,
+        timedelta(hours=BACKFILL_INTERVAL_HOURS),
+    )
+
+    entry.async_on_unload(unsub_history)
+    entry.async_on_unload(unsub_live)
+    entry.async_on_unload(unsub_backfill)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
-    await _send_data()
+    async def _delayed_start():
+        await asyncio.sleep(60)
+        await _send_data()
+        await _backfill()
+
+    hass.async_create_task(_delayed_start())
 
     return True
-
-
-async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(
