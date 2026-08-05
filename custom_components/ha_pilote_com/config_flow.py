@@ -6,6 +6,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -25,10 +26,21 @@ from .const import (
     BAT_OUT_HINTS,
     CONF_ADD_BATTERY_ENTITY,
     CONF_API_KEY,
+    CONF_BATTERY_CHARGE_POSITIVE,
+    CONF_BATTERY_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
     CONF_BRANDS,
     CONF_CONSUMERS,
     CONF_CONSUMPTION_ENTITY,
     CONF_GRID_ENTITY,
+    CONF_GRID_IMPORT_POSITIVE,
+    CONF_HA_TOKEN,
+    CONF_HA_URL,
+    CONF_METER_BATTERY_CHARGE,
+    CONF_METER_BATTERY_DISCHARGE,
+    CONF_METER_EXPORT,
+    CONF_METER_IMPORT,
+    CONF_METER_PRODUCTION,
     CONF_OUT_BATTERY_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_PROFILE,
@@ -179,9 +191,10 @@ class HaPiloteComOptionsFlow(OptionsFlow):
             )
         options.append(SelectOptionDict(value="done", label="Terminé"))
 
+        cat_labels = {"ev_charger": "Borne VE", "heat_pump": "PAC", "pool": "Piscine", "hot_water": "Chauffe-eau", "appliance": "Électroménager", "other": "Autres"}
         desc = "Aucun consommateur configuré."
         if consumers:
-            lines = [f"• {c['name']} ({c['entity']})" for c in consumers]
+            lines = [f"• {c['name']} [{cat_labels.get(c.get('category', 'other'), 'Autres')}] ({c['entity']})" for c in consumers]
             desc = "Consommateurs actuels :\n" + "\n".join(lines)
 
         return self.async_show_form(
@@ -205,6 +218,7 @@ class HaPiloteComOptionsFlow(OptionsFlow):
             consumers.append({
                 "entity": user_input["consumer_entity"],
                 "name": user_input["consumer_name"],
+                "category": user_input.get("consumer_category", "other"),
             })
             return self.async_create_entry(data={CONF_CONSUMERS: consumers})
 
@@ -217,6 +231,19 @@ class HaPiloteComOptionsFlow(OptionsFlow):
                     ),
                     vol.Required("consumer_name"): TextSelector(
                         TextSelectorConfig(type="text")
+                    ),
+                    vol.Required("consumer_category", default="other"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                SelectOptionDict(value="ev_charger", label="Borne de recharge"),
+                                SelectOptionDict(value="heat_pump", label="Pompe à chaleur (PAC)"),
+                                SelectOptionDict(value="pool", label="Piscine"),
+                                SelectOptionDict(value="hot_water", label="Chauffe-eau"),
+                                SelectOptionDict(value="appliance", label="Électroménager"),
+                                SelectOptionDict(value="other", label="Autres"),
+                            ],
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
                     ),
                 }
             ),
@@ -395,7 +422,12 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             for key in (CONF_PRODUCTION_ENTITY, CONF_CONSUMPTION_ENTITY,
                         CONF_ADD_BATTERY_ENTITY, CONF_OUT_BATTERY_ENTITY,
-                        CONF_SOC_ENTITY):
+                        CONF_SOC_ENTITY, CONF_BATTERY_ENTITY,
+                        CONF_BATTERY_SOC_ENTITY,
+                        CONF_METER_PRODUCTION, CONF_METER_IMPORT,
+                        CONF_METER_EXPORT, CONF_METER_BATTERY_CHARGE,
+                        CONF_METER_BATTERY_DISCHARGE,
+                        CONF_HA_URL, CONF_HA_TOKEN):
                 user_input.setdefault(key, "")
             if not is_legacy:
                 user_input[CONF_PROFILE] = profile
@@ -413,29 +445,82 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
             default=existing.get(CONF_GRID_ENTITY),
         )] = _entity_selector()
 
-        if profile in (PROFILE_SOLAR_BATTERY, PROFILE_SOLAR):
-            schema_dict[vol.Optional(
-                CONF_PRODUCTION_ENTITY,
-                description={"suggested_value": existing.get(CONF_PRODUCTION_ENTITY, "")},
-            )] = _entity_selector()
-            schema_dict[vol.Optional(
-                CONF_CONSUMPTION_ENTITY,
-                description={"suggested_value": existing.get(CONF_CONSUMPTION_ENTITY, "")},
-            )] = _entity_selector()
+        schema_dict[vol.Required(
+            CONF_GRID_IMPORT_POSITIVE,
+            default=existing.get(CONF_GRID_IMPORT_POSITIVE, True),
+        )] = BooleanSelector()
 
-        if profile == PROFILE_SOLAR_BATTERY:
-            schema_dict[vol.Optional(
-                CONF_ADD_BATTERY_ENTITY,
-                description={"suggested_value": existing.get(CONF_ADD_BATTERY_ENTITY, "")},
-            )] = _entity_selector()
-            schema_dict[vol.Optional(
-                CONF_OUT_BATTERY_ENTITY,
-                description={"suggested_value": existing.get(CONF_OUT_BATTERY_ENTITY, "")},
-            )] = _entity_selector()
-            schema_dict[vol.Optional(
-                CONF_SOC_ENTITY,
-                description={"suggested_value": existing.get(CONF_SOC_ENTITY, "")},
-            )] = EntitySelector(EntitySelectorConfig(domain="sensor"))
+        schema_dict[vol.Optional(
+            CONF_PRODUCTION_ENTITY,
+            description={"suggested_value": existing.get(CONF_PRODUCTION_ENTITY, "")},
+        )] = _entity_selector()
+
+        schema_dict[vol.Optional(
+            CONF_CONSUMPTION_ENTITY,
+            description={"suggested_value": existing.get(CONF_CONSUMPTION_ENTITY, "")},
+        )] = _entity_selector()
+
+        schema_dict[vol.Optional(
+            CONF_BATTERY_ENTITY,
+            description={"suggested_value": existing.get(CONF_BATTERY_ENTITY, "")},
+        )] = EntitySelector(EntitySelectorConfig(
+            domain="sensor", device_class="power",
+        ))
+
+        schema_dict[vol.Optional(
+            CONF_ADD_BATTERY_ENTITY,
+            description={"suggested_value": existing.get(CONF_ADD_BATTERY_ENTITY, "")},
+        )] = _entity_selector()
+
+        schema_dict[vol.Optional(
+            CONF_OUT_BATTERY_ENTITY,
+            description={"suggested_value": existing.get(CONF_OUT_BATTERY_ENTITY, "")},
+        )] = _entity_selector()
+
+        schema_dict[vol.Optional(
+            CONF_SOC_ENTITY,
+            description={"suggested_value": existing.get(CONF_SOC_ENTITY, existing.get(CONF_BATTERY_SOC_ENTITY, ""))},
+        )] = EntitySelector(EntitySelectorConfig(domain="sensor"))
+
+        schema_dict[vol.Required(
+            CONF_BATTERY_CHARGE_POSITIVE,
+            default=existing.get(CONF_BATTERY_CHARGE_POSITIVE, True),
+        )] = BooleanSelector()
+
+        schema_dict[vol.Optional(
+            CONF_METER_PRODUCTION,
+            description={"suggested_value": existing.get(CONF_METER_PRODUCTION, "")},
+        )] = EntitySelector(EntitySelectorConfig(
+            domain="sensor", device_class="energy",
+        ))
+
+        schema_dict[vol.Optional(
+            CONF_METER_IMPORT,
+            description={"suggested_value": existing.get(CONF_METER_IMPORT, "")},
+        )] = EntitySelector(EntitySelectorConfig(
+            domain="sensor", device_class="energy",
+        ))
+
+        schema_dict[vol.Optional(
+            CONF_METER_EXPORT,
+            description={"suggested_value": existing.get(CONF_METER_EXPORT, "")},
+        )] = EntitySelector(EntitySelectorConfig(
+            domain="sensor", device_class="energy",
+        ))
+
+        schema_dict[vol.Optional(
+            CONF_METER_BATTERY_CHARGE,
+            description={"suggested_value": existing.get(CONF_METER_BATTERY_CHARGE, "")},
+        )] = EntitySelector(EntitySelectorConfig(
+            domain="sensor", device_class="energy",
+        ))
+
+        schema_dict[vol.Optional(
+            CONF_METER_BATTERY_DISCHARGE,
+            description={"suggested_value": existing.get(CONF_METER_BATTERY_DISCHARGE, "")},
+        )] = EntitySelector(EntitySelectorConfig(
+            domain="sensor", device_class="energy",
+        ))
 
         schema_dict[vol.Required(
             CONF_UPDATE_INTERVAL,
@@ -447,9 +532,20 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
                 unit_of_measurement="min",
             )
         )
+
         schema_dict[vol.Required(
             CONF_API_KEY,
             default=existing.get(CONF_API_KEY),
+        )] = TextSelector(TextSelectorConfig(type="password"))
+
+        schema_dict[vol.Optional(
+            CONF_HA_URL,
+            description={"suggested_value": existing.get(CONF_HA_URL, "")},
+        )] = TextSelector(TextSelectorConfig(type="url"))
+
+        schema_dict[vol.Optional(
+            CONF_HA_TOKEN,
+            description={"suggested_value": existing.get(CONF_HA_TOKEN, "")},
         )] = TextSelector(TextSelectorConfig(type="password"))
 
         return self.async_show_form(

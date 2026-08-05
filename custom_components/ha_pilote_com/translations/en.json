@@ -49,26 +49,46 @@
       },
       "reconfigure": {
         "title": "Reconfigure Pilote Solaire",
-        "description": "Modify your integration settings.",
+        "description": "Modify your integration settings. Advanced fields (meters, polarity, HA) are optional.",
         "data": {
           "grid_entity": "Grid sensor",
+          "grid_import_positive": "Grid import = positive value",
           "production_entity": "Solar production sensor",
           "consumption_entity": "Consumption sensor",
+          "battery_entity": "Battery (single signed entity)",
           "add_battery_entity": "Battery charge sensor",
           "out_battery_entity": "Battery discharge sensor",
           "soc_entity": "Battery level (%)",
+          "battery_charge_positive": "Battery charge = positive value",
+          "meter_production": "Production energy meter (kWh)",
+          "meter_import": "Import energy meter (kWh)",
+          "meter_export": "Export energy meter (kWh)",
+          "meter_battery_charge": "Battery charge energy meter (kWh)",
+          "meter_battery_discharge": "Battery discharge energy meter (kWh)",
           "update_interval": "Send frequency",
-          "api_key": "API key"
+          "api_key": "API key",
+          "ha_url": "Home Assistant URL",
+          "ha_token": "HA Token (Long-Lived Access Token)"
         },
         "data_description": {
           "grid_entity": "Grid power — positive = import, negative = export",
+          "grid_import_positive": "Uncheck if your grid sensor is inverted (positive = export)",
           "production_entity": "Power produced by your panels",
           "consumption_entity": "Total house consumption (optional)",
+          "battery_entity": "Alternative to separate charge/discharge — single entity with signed value (+ charge, - discharge)",
           "add_battery_entity": "Battery charging power (optional)",
           "out_battery_entity": "Battery discharging power (optional)",
           "soc_entity": "Battery state of charge in % (optional)",
+          "battery_charge_positive": "Uncheck if your battery sensor is inverted",
+          "meter_production": "Cumulative kWh counter — takes priority over power sensor if set",
+          "meter_import": "Cumulative kWh grid import counter — takes priority over grid sensor if set",
+          "meter_export": "Cumulative kWh grid export counter — takes priority over grid sensor if set",
+          "meter_battery_charge": "Cumulative kWh battery charge counter",
+          "meter_battery_discharge": "Cumulative kWh battery discharge counter",
           "update_interval": "Data sending frequency in minutes (15 min recommended)",
-          "api_key": "Your Romande Dynamics API key"
+          "api_key": "Your Romande Dynamics API key",
+          "ha_url": "External HA URL (optional, for live API)",
+          "ha_token": "HA long-lived access token (optional, for live API)"
         }
       }
     },
@@ -89,11 +109,13 @@
         "title": "Add a consumer",
         "data": {
           "consumer_entity": "Entity",
-          "consumer_name": "Display name"
+          "consumer_name": "Display name",
+          "consumer_category": "Category"
         },
         "data_description": {
           "consumer_entity": "Consumer power sensor (e.g. EV charger, heat pump, pool…)",
-          "consumer_name": "Name that will appear in the cockpit chart"
+          "consumer_name": "Name that will appear in the cockpit chart",
+          "consumer_category": "Consumer type for classification"
         }
       }
     }
