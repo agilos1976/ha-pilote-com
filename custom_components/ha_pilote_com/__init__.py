@@ -181,10 +181,11 @@ def _split_signed(history: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 async def _get_history(hass, start, now, entity_id, use_delta=False):
+    query_start = start - timedelta(minutes=BUCKET_MINUTES) if use_delta else start
     states = await get_instance(hass).async_add_executor_job(
         state_changes_during_period,
         hass,
-        start,
+        query_start,
         now,
         entity_id,
     )
