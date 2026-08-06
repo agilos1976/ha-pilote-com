@@ -255,7 +255,7 @@ async def async_setup_entry(
     meter_battery_discharge = entry.data.get(CONF_METER_BATTERY_DISCHARGE, "")
     battery_charge_positive = entry.data.get(CONF_BATTERY_CHARGE_POSITIVE, True)
     interval_val = int(entry.data[CONF_UPDATE_INTERVAL])
-    if interval_val <= 24:
+    if interval_val < 5:
         interval_td = timedelta(hours=interval_val)
     else:
         interval_td = timedelta(minutes=interval_val)
