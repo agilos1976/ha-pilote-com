@@ -33,6 +33,7 @@ from .const import (
     CONF_METER_EXPORT,
     CONF_METER_IMPORT,
     CONF_METER_PRODUCTION,
+    CONF_CONSUMER_POWER_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
@@ -438,6 +439,20 @@ async def async_setup_entry(
         live_entity_ids.append(battery_soc_entity)
         entity_config["soc"] = battery_soc_entity
 
+    def _read_power_w(entity_id):
+        """Read an entity's current state and return value in watts, or None."""
+        state = hass.states.get(entity_id)
+        if state is None or state.state in ("unavailable", "unknown", ""):
+            return None
+        try:
+            val = float(state.state)
+        except (ValueError, TypeError):
+            return None
+        unit = (state.attributes.get("unit_of_measurement") or "").lower().strip()
+        if unit == "kw":
+            val *= 1000
+        return val
+
     async def _send_live(_now=None):
         entities = {}
         for entity_id in live_entity_ids:
@@ -455,6 +470,35 @@ async def async_setup_entry(
             "latitude": latitude,
             "longitude": longitude,
         }
+
+        consumers = entry.options.get(CONF_CONSUMERS, [])
+        if consumers:
+            consumers_live = []
+            for consumer in consumers:
+                power_eid = consumer.get(CONF_CONSUMER_POWER_ENTITY)
+                if not power_eid:
+                    main_eid = consumer["entity"]
+                    det = _detect_counter(hass, main_eid, consumer["name"])
+                    if det[0] is False:
+                        power_eid = main_eid
+                if not power_eid:
+                    continue
+                power_w = _read_power_w(power_eid)
+                if power_w is None:
+                    continue
+                subtract_ids = consumer.get(CONF_SUBTRACT_ENTITIES, [])
+                for sub_eid in subtract_ids:
+                    sub_w = _read_power_w(sub_eid)
+                    if sub_w is not None:
+                        power_w -= sub_w
+                consumers_live.append({
+                    "name": consumer["name"],
+                    "category": consumer.get("category", "other"),
+                    "power": round(max(0, power_w), 1),
+                    "unit": "W",
+                })
+            if consumers_live:
+                payload["consumers_live"] = consumers_live
 
         try:
             async with aiohttp.ClientSession() as session:

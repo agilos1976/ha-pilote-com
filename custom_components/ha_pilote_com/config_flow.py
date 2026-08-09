@@ -33,6 +33,7 @@ from .const import (
     CONF_METER_EXPORT,
     CONF_METER_IMPORT,
     CONF_METER_PRODUCTION,
+    CONF_CONSUMER_POWER_ENTITY,
     CONF_PRODUCTION_ENTITY,
     CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
@@ -182,6 +183,8 @@ class HaPiloteComOptionsFlow(OptionsFlow):
         if consumers:
             def _fmt(c):
                 base = f"• {c['name']} [{cat_labels.get(c.get('category', 'other'), 'Autres')}] ({c['entity']})"
+                if c.get(CONF_CONSUMER_POWER_ENTITY):
+                    base += f" ⚡ live"
                 subs = c.get(CONF_SUBTRACT_ENTITIES, [])
                 if subs:
                     base += f" − {len(subs)} entité(s)"
@@ -212,6 +215,9 @@ class HaPiloteComOptionsFlow(OptionsFlow):
                 "name": user_input["consumer_name"],
                 "category": user_input.get("consumer_category", "other"),
             }
+            power_ent = user_input.get(CONF_CONSUMER_POWER_ENTITY)
+            if power_ent:
+                entry[CONF_CONSUMER_POWER_ENTITY] = power_ent
             subtract = user_input.get(CONF_SUBTRACT_ENTITIES)
             if subtract:
                 entry[CONF_SUBTRACT_ENTITIES] = subtract if isinstance(subtract, list) else [subtract]
@@ -240,6 +246,9 @@ class HaPiloteComOptionsFlow(OptionsFlow):
                             ],
                             mode=SelectSelectorMode.DROPDOWN,
                         )
+                    ),
+                    vol.Optional(CONF_CONSUMER_POWER_ENTITY): EntitySelector(
+                        EntitySelectorConfig(domain="sensor", device_class="power")
                     ),
                     vol.Optional(CONF_SUBTRACT_ENTITIES): EntitySelector(
                         EntitySelectorConfig(domain="sensor", multiple=True)

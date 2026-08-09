@@ -17,6 +17,7 @@ CONF_HA_URL = "ha_url"
 CONF_HA_TOKEN = "ha_token"
 CONF_CONSUMERS = "consumers"
 CONF_SUBTRACT_ENTITIES = "subtract_entities"
+CONF_CONSUMER_POWER_ENTITY = "consumer_power_entity"
 DEFAULT_UPDATE_INTERVAL = 15
 
 API_URL = "https://carrard.ch/pilote/api/post_data_user.php"
