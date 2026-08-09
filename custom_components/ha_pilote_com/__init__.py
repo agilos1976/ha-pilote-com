@@ -372,9 +372,15 @@ async def async_setup_entry(
                     sub_histories = []
                     for sub_eid in subtract_ids:
                         sub_counter, _sc, _dc, _u = _detect_counter(hass, sub_eid, f"sub:{sub_eid}")
-                        if sub_counter is not None:
-                            sub_h = await _get_history(hass, start, now, sub_eid, use_delta=sub_counter)
-                            sub_histories.append(sub_h)
+                        if sub_counter is None:
+                            continue
+                        if sub_counter != is_counter:
+                            _LOGGER.warning(
+                                "Consumer %s: subtract entity %s has different type (counter=%s vs parent counter=%s), forcing parent mode",
+                                name, sub_eid, sub_counter, is_counter,
+                            )
+                        sub_h = await _get_history(hass, start, now, sub_eid, use_delta=is_counter)
+                        sub_histories.append(sub_h)
                     c_history = _subtract_histories(c_history, sub_histories)
                 _LOGGER.warning(
                     "Consumer %s: sc=%r dc=%r unit=%r counter=%s pts=%d first=%s subs=%d",
@@ -660,8 +666,14 @@ async def async_setup_entry(
                             sub_hs = []
                             for sub_eid in sub_ids:
                                 s_ctr, _sc2, _dc2, _u2 = _detect_counter(hass, sub_eid, f"sub:{sub_eid}")
-                                if s_ctr is not None:
-                                    sub_hs.append(await _get_history(hass, start_utc, end_utc, sub_eid, use_delta=s_ctr))
+                                if s_ctr is None:
+                                    continue
+                                if s_ctr != is_ctr:
+                                    _LOGGER.warning(
+                                        "Backfill consumer %s: subtract entity %s type mismatch (counter=%s vs parent=%s), forcing parent mode",
+                                        c_name, sub_eid, s_ctr, is_ctr,
+                                    )
+                                sub_hs.append(await _get_history(hass, start_utc, end_utc, sub_eid, use_delta=is_ctr))
                             c_h = _subtract_histories(c_h, sub_hs)
                         c_data.append({
                             "name": c_name,
