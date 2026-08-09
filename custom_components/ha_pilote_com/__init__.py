@@ -670,12 +670,6 @@ async def async_setup_entry(
                 if battery_soc_entity:
                     soc_h = await _get_history(hass, start_utc, end_utc, battery_soc_entity)
 
-                if not imp_h and not exp_h:
-                    for sl in range_slots:
-                        failures[sl] = failures.get(sl, 0) + 1
-                    _LOGGER.warning("Backfill: pas de données recorder pour %s→%s", r_start, r_end)
-                    continue
-
                 payload = {
                     "api_key": api_key,
                     "production_entity": production_entity,
@@ -729,6 +723,16 @@ async def async_setup_entry(
                         })
                     if c_data:
                         payload["consumers"] = c_data
+
+                has_main = bool(imp_h or exp_h)
+                has_consumers = any(
+                    c["history"] for c in payload.get("consumers", [])
+                )
+                if not has_main and not has_consumers:
+                    for sl in range_slots:
+                        failures[sl] = failures.get(sl, 0) + 1
+                    _LOGGER.warning("Backfill: pas de données recorder pour %s→%s", r_start, r_end)
+                    continue
 
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
