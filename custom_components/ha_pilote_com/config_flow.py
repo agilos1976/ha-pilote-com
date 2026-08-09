@@ -153,12 +153,20 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
 class HaPiloteComOptionsFlow(OptionsFlow):
     """Options flow pour gérer les consommateurs."""
 
+    def __init__(self):
+        self._edit_index: int | None = None
+
     async def async_step_init(self, user_input=None):
         consumers = list(self.config_entry.options.get(CONF_CONSUMERS, []))
         if user_input is not None:
             action = user_input.get("action")
             if action == "add":
                 return await self.async_step_add_consumer()
+            if action and action.startswith("edit:"):
+                idx = int(action.split(":")[1])
+                if 0 <= idx < len(consumers):
+                    self._edit_index = idx
+                    return await self.async_step_edit_consumer()
             if action and action.startswith("remove:"):
                 idx = int(action.split(":")[1])
                 if 0 <= idx < len(consumers):
@@ -170,6 +178,12 @@ class HaPiloteComOptionsFlow(OptionsFlow):
             SelectOptionDict(value="add", label="Ajouter un consommateur"),
         ]
         for i, c in enumerate(consumers):
+            options.append(
+                SelectOptionDict(
+                    value=f"edit:{i}",
+                    label=f"Modifier : {c['name']}",
+                )
+            )
             options.append(
                 SelectOptionDict(
                     value=f"remove:{i}",
@@ -226,36 +240,90 @@ class HaPiloteComOptionsFlow(OptionsFlow):
 
         return self.async_show_form(
             step_id="add_consumer",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("consumer_entity"): EntitySelector(
-                        EntitySelectorConfig(domain="sensor")
-                    ),
-                    vol.Required("consumer_name"): TextSelector(
-                        TextSelectorConfig(type="text")
-                    ),
-                    vol.Required("consumer_category", default="other"): SelectSelector(
-                        SelectSelectorConfig(
-                            options=[
-                                SelectOptionDict(value="ev_charger", label="Borne de recharge"),
-                                SelectOptionDict(value="heat_pump", label="Pompe à chaleur (PAC)"),
-                                SelectOptionDict(value="pool", label="Piscine"),
-                                SelectOptionDict(value="hot_water", label="Chauffe-eau"),
-                                SelectOptionDict(value="appliance", label="Électroménager"),
-                                SelectOptionDict(value="other", label="Autres"),
-                            ],
-                            mode=SelectSelectorMode.DROPDOWN,
-                        )
-                    ),
-                    vol.Optional(CONF_CONSUMER_POWER_ENTITY): EntitySelector(
-                        EntitySelectorConfig(domain="sensor", device_class="power")
-                    ),
-                    vol.Optional(CONF_SUBTRACT_ENTITIES): EntitySelector(
-                        EntitySelectorConfig(domain="sensor", multiple=True)
-                    ),
-                }
-            ),
+            data_schema=self._consumer_schema(),
         )
+
+    async def async_step_edit_consumer(self, user_input=None):
+        consumers = list(self.config_entry.options.get(CONF_CONSUMERS, []))
+        idx = self._edit_index
+        if idx is None or idx >= len(consumers):
+            return await self.async_step_init()
+
+        if user_input is not None:
+            entry = {
+                "entity": user_input["consumer_entity"],
+                "name": user_input["consumer_name"],
+                "category": user_input.get("consumer_category", "other"),
+            }
+            power_ent = user_input.get(CONF_CONSUMER_POWER_ENTITY)
+            if power_ent:
+                entry[CONF_CONSUMER_POWER_ENTITY] = power_ent
+            subtract = user_input.get(CONF_SUBTRACT_ENTITIES)
+            if subtract:
+                entry[CONF_SUBTRACT_ENTITIES] = subtract if isinstance(subtract, list) else [subtract]
+            consumers[idx] = entry
+            self._edit_index = None
+            return self.async_create_entry(data={CONF_CONSUMERS: consumers})
+
+        existing = consumers[idx]
+        return self.async_show_form(
+            step_id="edit_consumer",
+            data_schema=self._consumer_schema(existing),
+        )
+
+    @staticmethod
+    def _consumer_schema(defaults=None):
+        d = defaults or {}
+        schema = {}
+
+        ent = d.get("entity")
+        if ent:
+            schema[vol.Required("consumer_entity", default=ent)] = EntitySelector(
+                EntitySelectorConfig(domain="sensor")
+            )
+        else:
+            schema[vol.Required("consumer_entity")] = EntitySelector(
+                EntitySelectorConfig(domain="sensor")
+            )
+
+        schema[vol.Required("consumer_name", default=d.get("name", ""))] = TextSelector(
+            TextSelectorConfig(type="text")
+        )
+        schema[vol.Required("consumer_category", default=d.get("category", "other"))] = SelectSelector(
+            SelectSelectorConfig(
+                options=[
+                    SelectOptionDict(value="ev_charger", label="Borne de recharge"),
+                    SelectOptionDict(value="heat_pump", label="Pompe à chaleur (PAC)"),
+                    SelectOptionDict(value="pool", label="Piscine"),
+                    SelectOptionDict(value="hot_water", label="Chauffe-eau"),
+                    SelectOptionDict(value="appliance", label="Électroménager"),
+                    SelectOptionDict(value="other", label="Autres"),
+                ],
+                mode=SelectSelectorMode.DROPDOWN,
+            )
+        )
+
+        power_ent = d.get(CONF_CONSUMER_POWER_ENTITY)
+        if power_ent:
+            schema[vol.Optional(CONF_CONSUMER_POWER_ENTITY, default=power_ent)] = EntitySelector(
+                EntitySelectorConfig(domain="sensor", device_class="power")
+            )
+        else:
+            schema[vol.Optional(CONF_CONSUMER_POWER_ENTITY)] = EntitySelector(
+                EntitySelectorConfig(domain="sensor", device_class="power")
+            )
+
+        subs = d.get(CONF_SUBTRACT_ENTITIES)
+        if subs:
+            schema[vol.Optional(CONF_SUBTRACT_ENTITIES, default=subs)] = EntitySelector(
+                EntitySelectorConfig(domain="sensor", multiple=True)
+            )
+        else:
+            schema[vol.Optional(CONF_SUBTRACT_ENTITIES)] = EntitySelector(
+                EntitySelectorConfig(domain="sensor", multiple=True)
+            )
+
+        return vol.Schema(schema)
 
 
 class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
