@@ -34,6 +34,7 @@ from .const import (
     CONF_METER_IMPORT,
     CONF_METER_PRODUCTION,
     CONF_PRODUCTION_ENTITY,
+    CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
@@ -179,7 +180,13 @@ class HaPiloteComOptionsFlow(OptionsFlow):
         cat_labels = {"ev_charger": "Borne de recharge", "heat_pump": "PAC", "pool": "Piscine", "hot_water": "Chauffe-eau", "appliance": "Électroménager", "other": "Autres"}
         desc = "Aucun consommateur configuré."
         if consumers:
-            lines = [f"• {c['name']} [{cat_labels.get(c.get('category', 'other'), 'Autres')}] ({c['entity']})" for c in consumers]
+            def _fmt(c):
+                base = f"• {c['name']} [{cat_labels.get(c.get('category', 'other'), 'Autres')}] ({c['entity']})"
+                subs = c.get(CONF_SUBTRACT_ENTITIES, [])
+                if subs:
+                    base += f" − {len(subs)} entité(s)"
+                return base
+            lines = [_fmt(c) for c in consumers]
             desc = "Consommateurs actuels :\n" + "\n".join(lines)
 
         return self.async_show_form(
@@ -200,11 +207,15 @@ class HaPiloteComOptionsFlow(OptionsFlow):
     async def async_step_add_consumer(self, user_input=None):
         if user_input is not None:
             consumers = list(self.config_entry.options.get(CONF_CONSUMERS, []))
-            consumers.append({
+            entry = {
                 "entity": user_input["consumer_entity"],
                 "name": user_input["consumer_name"],
                 "category": user_input.get("consumer_category", "other"),
-            })
+            }
+            subtract = user_input.get(CONF_SUBTRACT_ENTITIES)
+            if subtract:
+                entry[CONF_SUBTRACT_ENTITIES] = subtract if isinstance(subtract, list) else [subtract]
+            consumers.append(entry)
             return self.async_create_entry(data={CONF_CONSUMERS: consumers})
 
         return self.async_show_form(
@@ -229,6 +240,9 @@ class HaPiloteComOptionsFlow(OptionsFlow):
                             ],
                             mode=SelectSelectorMode.DROPDOWN,
                         )
+                    ),
+                    vol.Optional(CONF_SUBTRACT_ENTITIES): EntitySelector(
+                        EntitySelectorConfig(domain="sensor", multiple=True)
                     ),
                 }
             ),

@@ -34,6 +34,7 @@ from .const import (
     CONF_METER_IMPORT,
     CONF_METER_PRODUCTION,
     CONF_PRODUCTION_ENTITY,
+    CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
     COVERAGE_API_URL,
     DOMAIN,
@@ -50,6 +51,23 @@ type HaPiloteComConfigEntry = ConfigEntry
 
 def _bucket_start(dt: datetime) -> datetime:
     return dt.replace(minute=(dt.minute // BUCKET_MINUTES) * BUCKET_MINUTES, second=0, microsecond=0)
+
+
+def _subtract_histories(main_history: list[dict], sub_histories: list[list[dict]]) -> list[dict]:
+    """Subtract values of sub_histories from main_history, matching by timestamp."""
+    if not sub_histories:
+        return main_history
+    sub_maps = []
+    for sh in sub_histories:
+        sub_maps.append({pt["timestamp"]: pt["value"] for pt in sh})
+    result = []
+    for pt in main_history:
+        ts = pt["timestamp"]
+        val = pt["value"]
+        for sm in sub_maps:
+            val -= sm.get(ts, 0)
+        result.append({"timestamp": ts, "value": round(max(0, val), 4)})
+    return result
 
 
 def _aggregate_15min(states: list, period_start: datetime, period_end: datetime) -> list[dict]:
@@ -349,10 +367,20 @@ async def async_setup_entry(
                 if is_counter is None:
                     continue
                 c_history = await _get_history(hass, start, now, entity_id, use_delta=is_counter)
+                subtract_ids = consumer.get(CONF_SUBTRACT_ENTITIES, [])
+                if subtract_ids:
+                    sub_histories = []
+                    for sub_eid in subtract_ids:
+                        sub_counter, _sc, _dc, _u = _detect_counter(hass, sub_eid, f"sub:{sub_eid}")
+                        if sub_counter is not None:
+                            sub_h = await _get_history(hass, start, now, sub_eid, use_delta=sub_counter)
+                            sub_histories.append(sub_h)
+                    c_history = _subtract_histories(c_history, sub_histories)
                 _LOGGER.warning(
-                    "Consumer %s: sc=%r dc=%r unit=%r counter=%s pts=%d first=%s",
+                    "Consumer %s: sc=%r dc=%r unit=%r counter=%s pts=%d first=%s subs=%d",
                     name, sc, dc, unit, is_counter, len(c_history),
                     c_history[0]["value"] if c_history else "N/A",
+                    len(subtract_ids),
                 )
                 consumers_data.append({
                     "name": name,
@@ -627,6 +655,14 @@ async def async_setup_entry(
                         if is_ctr is None:
                             continue
                         c_h = await _get_history(hass, start_utc, end_utc, eid, use_delta=is_ctr)
+                        sub_ids = consumer.get(CONF_SUBTRACT_ENTITIES, [])
+                        if sub_ids:
+                            sub_hs = []
+                            for sub_eid in sub_ids:
+                                s_ctr, _sc2, _dc2, _u2 = _detect_counter(hass, sub_eid, f"sub:{sub_eid}")
+                                if s_ctr is not None:
+                                    sub_hs.append(await _get_history(hass, start_utc, end_utc, sub_eid, use_delta=s_ctr))
+                            c_h = _subtract_histories(c_h, sub_hs)
                         c_data.append({
                             "name": c_name,
                             "entity": eid,
