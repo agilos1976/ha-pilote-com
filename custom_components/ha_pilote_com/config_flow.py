@@ -85,51 +85,51 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
     meter_prod = d.get(CONF_METER_PRODUCTION)
     if meter_prod:
         schema[vol.Optional(CONF_METER_PRODUCTION, default=meter_prod)] = EntitySelector(
-            EntitySelectorConfig(domain="sensor", device_class="energy")
+            EntitySelectorConfig(domain="sensor", unit_of_measurement=["Wh", "kWh"])
         )
     else:
         schema[vol.Optional(CONF_METER_PRODUCTION)] = EntitySelector(
-            EntitySelectorConfig(domain="sensor", device_class="energy")
+            EntitySelectorConfig(domain="sensor", unit_of_measurement=["Wh", "kWh"])
         )
 
     meter_imp = d.get(CONF_METER_IMPORT)
     if meter_imp:
         schema[vol.Optional(CONF_METER_IMPORT, default=meter_imp)] = EntitySelector(
-            EntitySelectorConfig(domain="sensor", device_class="energy")
+            EntitySelectorConfig(domain="sensor", unit_of_measurement=["Wh", "kWh"])
         )
     else:
         schema[vol.Optional(CONF_METER_IMPORT)] = EntitySelector(
-            EntitySelectorConfig(domain="sensor", device_class="energy")
+            EntitySelectorConfig(domain="sensor", unit_of_measurement=["Wh", "kWh"])
         )
 
     meter_exp = d.get(CONF_METER_EXPORT)
     if meter_exp:
         schema[vol.Optional(CONF_METER_EXPORT, default=meter_exp)] = EntitySelector(
-            EntitySelectorConfig(domain="sensor", device_class="energy")
+            EntitySelectorConfig(domain="sensor", unit_of_measurement=["Wh", "kWh"])
         )
     else:
         schema[vol.Optional(CONF_METER_EXPORT)] = EntitySelector(
-            EntitySelectorConfig(domain="sensor", device_class="energy")
+            EntitySelectorConfig(domain="sensor", unit_of_measurement=["Wh", "kWh"])
         )
 
     meter_bat_ch = d.get(CONF_METER_BATTERY_CHARGE)
     if meter_bat_ch:
         schema[vol.Optional(CONF_METER_BATTERY_CHARGE, default=meter_bat_ch)] = EntitySelector(
-            EntitySelectorConfig(domain="sensor", device_class="energy")
+            EntitySelectorConfig(domain="sensor", unit_of_measurement=["Wh", "kWh"])
         )
     else:
         schema[vol.Optional(CONF_METER_BATTERY_CHARGE)] = EntitySelector(
-            EntitySelectorConfig(domain="sensor", device_class="energy")
+            EntitySelectorConfig(domain="sensor", unit_of_measurement=["Wh", "kWh"])
         )
 
     meter_bat_dis = d.get(CONF_METER_BATTERY_DISCHARGE)
     if meter_bat_dis:
         schema[vol.Optional(CONF_METER_BATTERY_DISCHARGE, default=meter_bat_dis)] = EntitySelector(
-            EntitySelectorConfig(domain="sensor", device_class="energy")
+            EntitySelectorConfig(domain="sensor", unit_of_measurement=["Wh", "kWh"])
         )
     else:
         schema[vol.Optional(CONF_METER_BATTERY_DISCHARGE)] = EntitySelector(
-            EntitySelectorConfig(domain="sensor", device_class="energy")
+            EntitySelectorConfig(domain="sensor", unit_of_measurement=["Wh", "kWh"])
         )
 
     schema[vol.Required(CONF_BATTERY_CHARGE_POSITIVE, default=d.get(CONF_BATTERY_CHARGE_POSITIVE, True))] = BooleanSelector()
