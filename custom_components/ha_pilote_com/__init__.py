@@ -8,6 +8,7 @@ import asyncio
 import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.components.recorder import get_instance
@@ -54,6 +55,10 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 BUCKET_MINUTES = 15
+
+# La plateforme switch n'expose qu'une entite : l'autorisation de
+# piloter la borne. Elle ne se cree que si une borne est configuree.
+PLATFORMS = [Platform.SWITCH]
 
 type HaPiloteComConfigEntry = ConfigEntry
 
@@ -825,6 +830,36 @@ async def async_setup_entry(
     async def _ev_control(_now=None):
         if not ev_switch and not ev_amps:
             return
+
+        store = hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})
+
+        # Interrupteur "Pilote optimise votre recharge VE" a l'arret :
+        # on rend la borne dans un etat utilisable une seule fois, puis
+        # on n'y touche plus. La laisser coupee priverait l'utilisateur
+        # de recharge sans motif visible.
+        if not store.get("ev_enabled", False):
+            if store.pop("ev_release", False) and ev_state["amps"] is not None:
+                if ev_amps:
+                    st = hass.states.get(ev_amps)
+                    vmax = None
+                    if st is not None:
+                        try:
+                            vmax = float(st.attributes.get("max"))
+                        except (TypeError, ValueError):
+                            vmax = None
+                    if vmax:
+                        await hass.services.async_call(
+                            "number", "set_value",
+                            {"entity_id": ev_amps, "value": vmax}, blocking=True)
+                if ev_switch:
+                    await hass.services.async_call(
+                        "switch", "turn_on", {"entity_id": ev_switch}, blocking=True)
+                _LOGGER.info("Pilotage VE desactive : borne rendue a l'utilisateur")
+                ev_state["amps"] = None
+                ev_state["phases"] = None
+                ev_state["on"] = None
+            return
+
         loop_now = asyncio.get_event_loop().time()
         if loop_now < ev_state["next_call"]:
             return
@@ -908,10 +943,14 @@ async def async_setup_entry(
 
     hass.async_create_task(_delayed_start())
 
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
     return True
 
 
 async def async_unload_entry(
     hass: HomeAssistant, entry: HaPiloteComConfigEntry
 ) -> bool:
+    await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     return True
