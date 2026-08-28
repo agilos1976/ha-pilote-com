@@ -777,7 +777,7 @@ async def async_setup_entry(
         "phases": None,
         "on": None,
         "next_call": 0.0,   # monotonic
-        "last_ok": 0.0,
+        "last_ok": None,    # renseigne au premier cycle
     }
 
     def _num(entity_id, default=0.0):
@@ -821,6 +821,21 @@ async def async_setup_entry(
             ev_state["amps"] = amperes
             ev_state["phases"] = phases
         else:
+            # Redescendre l'amperage AVANT de couper, et le faire meme
+            # sans switch configure : beaucoup de bornes s'arretent sur
+            # une consigne nulle, et sans cela une installation declaree
+            # avec le seul "number" n'avait aucun moyen de stopper.
+            if ev_amps and ev_state["amps"] != 0:
+                vmin = 0.0
+                st = hass.states.get(ev_amps)
+                if st is not None:
+                    try:
+                        vmin = float(st.attributes.get("min", 0) or 0)
+                    except (TypeError, ValueError):
+                        vmin = 0.0
+                await hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": ev_amps, "value": vmin}, blocking=True)
             if ev_switch and ev_state["on"] is not False:
                 await hass.services.async_call(
                     "switch", "turn_off", {"entity_id": ev_switch}, blocking=True)
@@ -861,6 +876,8 @@ async def async_setup_entry(
             return
 
         loop_now = asyncio.get_event_loop().time()
+        if ev_state["last_ok"] is None:
+            ev_state["last_ok"] = loop_now
         if loop_now < ev_state["next_call"]:
             return
 
@@ -890,7 +907,10 @@ async def async_setup_entry(
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
             # Serveur injoignable : on tient la consigne un moment, puis on
             # coupe. Laisser la borne dans un état indéterminé serait pire.
-            if ev_state["last_ok"] and (loop_now - ev_state["last_ok"]) > EV_FALLBACK_HOLD_SECONDS:
+            # last_ok vaut le demarrage tant qu'aucun appel n'a abouti :
+            # sinon un serveur injoignable des le debut laissait la borne
+            # tourner indefiniment, alors que Pilote est cense la piloter.
+            if (loop_now - ev_state["last_ok"]) > EV_FALLBACK_HOLD_SECONDS:
                 _LOGGER.warning("Pilotage VE : serveur injoignable (%s), arrêt de la charge", err)
                 await _ev_apply(0, ev_state["phases"])
             ev_state["next_call"] = loop_now + EV_INTERVAL_SECONDS
@@ -901,7 +921,15 @@ async def async_setup_entry(
             return
 
         ev_state["last_ok"] = loop_now
-        await _ev_apply(int(data.get("amperes", 0) or 0), int(data.get("phases", 0) or 0))
+        cible = int(data.get("amperes", 0) or 0)
+        # Trace sur changement seulement : le detail de la decision vient
+        # du serveur, sans lui un arret est indechiffrable cote HA.
+        if cible != ev_state["amps"]:
+            _LOGGER.info(
+                "Pilotage VE : %s A (%s) — %s",
+                cible, data.get("source", "?"), data.get("reason", ""),
+            )
+        await _ev_apply(cible, int(data.get("phases", 0) or 0))
         ev_state["next_call"] = loop_now + float(data.get("poll_in") or EV_INTERVAL_SECONDS)
 
     unsub_history = async_track_time_interval(
