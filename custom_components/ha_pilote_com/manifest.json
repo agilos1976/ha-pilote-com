@@ -7,5 +7,5 @@
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/agilos1976/ha-pilote-com/issues",
   "requirements": ["aiohttp>=3.8.0"],
-  "version": "1.17.3"
+  "version": "1.17.4"
 }

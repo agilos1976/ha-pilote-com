@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta
 
@@ -923,7 +924,12 @@ async def async_setup_entry(
                 ) as resp:
                     if resp.status != 200:
                         raise aiohttp.ClientError(f"HTTP {resp.status}")
-                    data = await resp.json(content_type=None)
+                    # Lecture en texte puis json.loads : resp.json() echoue
+                    # sur un BOM UTF-8, qu'un fichier PHP enregistre avec
+                    # peut emettre avant sa reponse. Le pilotage ne doit pas
+                    # dependre de l'encodage d'un fichier source.
+                    brut = await resp.text()
+                    data = json.loads(brut.lstrip("﻿"))
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
             # Serveur injoignable : on tient la consigne un moment, puis on
             # coupe. Laisser la borne dans un état indéterminé serait pire.
