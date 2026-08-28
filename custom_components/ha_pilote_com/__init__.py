@@ -10,6 +10,7 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import state_changes_during_period
@@ -848,11 +849,24 @@ async def async_setup_entry(
 
         store = hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})
 
+        # Etat lu sur l'entite elle-meme, pas sur le dictionnaire partage :
+        # celui-ci reste vide tant que la plateforme switch n'est pas
+        # chargee, et le pilotage semblait alors desactive sans raison
+        # visible. Le registre donne l'entity_id depuis l'unique_id.
+        actif = store.get("ev_enabled")
+        reg = er.async_get(hass)
+        eid = reg.async_get_entity_id("switch", DOMAIN, f"{entry.entry_id}_ev_enabled")
+        if eid:
+            st_sw = hass.states.get(eid)
+            if st_sw is not None and st_sw.state in ("on", "off"):
+                actif = (st_sw.state == "on")
+                store["ev_enabled"] = actif
+
         # Interrupteur "Pilote optimise votre recharge VE" a l'arret :
         # on rend la borne dans un etat utilisable une seule fois, puis
         # on n'y touche plus. La laisser coupee priverait l'utilisateur
         # de recharge sans motif visible.
-        if not store.get("ev_enabled", False):
+        if not actif:
             if store.pop("ev_release", False) and ev_state["amps"] is not None:
                 if ev_amps:
                     st = hass.states.get(ev_amps)
@@ -931,6 +945,14 @@ async def async_setup_entry(
             )
         await _ev_apply(cible, int(data.get("phases", 0) or 0))
         ev_state["next_call"] = loop_now + float(data.get("poll_in") or EV_INTERVAL_SECONDS)
+
+    if ev_switch or ev_amps:
+        _LOGGER.info(
+            "Pilotage VE configure : switch=%s amperage=%s branche=%s puissance=%s",
+            ev_switch or "-", ev_amps or "-", ev_plugged or "-", ev_power or "-",
+        )
+    else:
+        _LOGGER.info("Pilotage VE inactif : aucune entite de borne configuree")
 
     unsub_history = async_track_time_interval(
         hass,
