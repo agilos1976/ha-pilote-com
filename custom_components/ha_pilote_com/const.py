@@ -18,6 +18,12 @@ CONF_HA_TOKEN = "ha_token"
 CONF_CONSUMERS = "consumers"
 CONF_SUBTRACT_ENTITIES = "subtract_entities"
 CONF_CONSUMER_POWER_ENTITY = "consumer_power_entity"
+
+# --- Borne de recharge : pilotage ---
+CONF_EV_SWITCH = "ev_switch"          # switch marche/arret de la borne
+CONF_EV_AMPS = "ev_amps"              # number : consigne d'amperage
+CONF_EV_PLUGGED = "ev_plugged"        # binary_sensor : cable branche
+CONF_EV_POWER = "ev_power"            # sensor : puissance instantanee de la borne
 DEFAULT_UPDATE_INTERVAL = 15
 
 API_URL = "https://carrard.ch/pilote/api/post_data_user.php"
@@ -29,3 +35,11 @@ BACKFILL_INTERVAL_HOURS = 6
 
 LIVE_API_URL = "https://carrard.ch/pilote/api/post_live.php"
 LIVE_INTERVAL_SECONDS = 3
+
+# Pilotage borne : le serveur decide, le plugin applique.
+EV_API_URL = "https://carrard.ch/pilote/api.php"
+# Cadence du timer. Le serveur renvoie poll_in (10 s en charge, 60 s au repos)
+# et la boucle sort immediatement tant que l'echeance n'est pas atteinte.
+EV_INTERVAL_SECONDS = 10
+EV_FALLBACK_HOLD_SECONDS = 120    # maintien de la consigne si le serveur ne repond plus
+EV_PHASE_SWITCH_WAIT = 30         # pause imposee par la borne lors d'une bascule mono/tri

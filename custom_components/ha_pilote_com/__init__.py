@@ -24,6 +24,10 @@ from .const import (
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
+    CONF_EV_AMPS,
+    CONF_EV_PLUGGED,
+    CONF_EV_POWER,
+    CONF_EV_SWITCH,
     CONF_GRID_ENTITY,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_HA_TOKEN,
@@ -39,6 +43,10 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     COVERAGE_API_URL,
     DOMAIN,
+    EV_API_URL,
+    EV_FALLBACK_HOLD_SECONDS,
+    EV_INTERVAL_SECONDS,
+    EV_PHASE_SWITCH_WAIT,
     LIVE_API_URL,
     LIVE_INTERVAL_SECONDS,
 )
@@ -750,6 +758,117 @@ async def async_setup_entry(
             except Exception as err:
                 _LOGGER.error("Backfill error %s→%s: %s", r_start, r_end, err)
 
+    # ------------------------------------------------------------------
+    # Pilotage de la borne de recharge
+    #
+    # Le serveur décide (getEvPower), le plugin applique. Aucune logique de
+    # décision ici : elle a besoin des prix, des prévisions et du planning
+    # batterie, qui vivent côté serveur. Le plugin fournit les mesures et
+    # exécute la consigne.
+    # ------------------------------------------------------------------
+
+    ev_state = {
+        "amps": None,       # dernière consigne appliquée
+        "phases": None,
+        "on": None,
+        "next_call": 0.0,   # monotonic
+        "last_ok": 0.0,
+    }
+
+    def _num(entity_id, default=0.0):
+        """Valeur numérique d'une entité, ou default si absente/indisponible."""
+        if not entity_id:
+            return default
+        st = hass.states.get(entity_id)
+        if st is None or st.state in ("unknown", "unavailable", "", None):
+            return default
+        try:
+            return float(st.state)
+        except (TypeError, ValueError):
+            return default
+
+    def _is_on(entity_id):
+        st = hass.states.get(entity_id) if entity_id else None
+        return st is not None and st.state == "on"
+
+    async def _ev_apply(amperes, phases):
+        """Écrit la consigne sur la borne, uniquement si elle change.
+
+        Réécrire la même valeur toutes les 30 s use la mémoire de la borne et
+        génère du trafic pour rien.
+        """
+        if amperes and amperes > 0:
+            # Bascule de phases : la plupart des bornes exigent un arrêt, une
+            # pause, puis un redémarrage — pas une simple écriture.
+            if ev_state["phases"] is not None and phases != ev_state["phases"] and ev_switch:
+                await hass.services.async_call(
+                    "switch", "turn_off", {"entity_id": ev_switch}, blocking=True)
+                await asyncio.sleep(EV_PHASE_SWITCH_WAIT)
+                ev_state["on"] = False
+            if ev_amps and amperes != ev_state["amps"]:
+                await hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": ev_amps, "value": amperes}, blocking=True)
+            if ev_switch and ev_state["on"] is not True:
+                await hass.services.async_call(
+                    "switch", "turn_on", {"entity_id": ev_switch}, blocking=True)
+                ev_state["on"] = True
+            ev_state["amps"] = amperes
+            ev_state["phases"] = phases
+        else:
+            if ev_switch and ev_state["on"] is not False:
+                await hass.services.async_call(
+                    "switch", "turn_off", {"entity_id": ev_switch}, blocking=True)
+                ev_state["on"] = False
+            ev_state["amps"] = 0
+
+    async def _ev_control(_now=None):
+        if not ev_switch and not ev_amps:
+            return
+        loop_now = asyncio.get_event_loop().time()
+        if loop_now < ev_state["next_call"]:
+            return
+
+        grid_w = _num(grid_entity)
+        if not grid_import_positive:
+            grid_w = -grid_w
+        params = {
+            "action": "getEvPower",
+            # api.php résout l'user_id depuis la clé : le plugin n'a pas d'id.
+            "api_key": api_key,
+            "grid": round(grid_w),
+            "ev": round(_num(ev_power)),
+            "plugged": "1" if (not ev_plugged or _is_on(ev_plugged)) else "0",
+            "bat": round(_num(battery_entity)),
+            "bat_soc": round(_num(battery_soc_entity)),
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    EV_API_URL, params=params,
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    if resp.status != 200:
+                        raise aiohttp.ClientError(f"HTTP {resp.status}")
+                    data = await resp.json(content_type=None)
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
+            # Serveur injoignable : on tient la consigne un moment, puis on
+            # coupe. Laisser la borne dans un état indéterminé serait pire.
+            if ev_state["last_ok"] and (loop_now - ev_state["last_ok"]) > EV_FALLBACK_HOLD_SECONDS:
+                _LOGGER.warning("Pilotage VE : serveur injoignable (%s), arrêt de la charge", err)
+                await _ev_apply(0, ev_state["phases"])
+            ev_state["next_call"] = loop_now + EV_INTERVAL_SECONDS
+            return
+
+        if not data.get("ok"):
+            ev_state["next_call"] = loop_now + EV_INTERVAL_SECONDS
+            return
+
+        ev_state["last_ok"] = loop_now
+        await _ev_apply(int(data.get("amperes", 0) or 0), int(data.get("phases", 0) or 0))
+        ev_state["next_call"] = loop_now + float(data.get("poll_in") or EV_INTERVAL_SECONDS)
+
     unsub_history = async_track_time_interval(
         hass,
         _send_data,
@@ -768,9 +887,18 @@ async def async_setup_entry(
         timedelta(hours=BACKFILL_INTERVAL_HOURS),
     )
 
+    # Cadence fixe cote timer ; _ev_control respecte le poll_in du serveur
+    # et sort immediatement si l'echeance n'est pas atteinte.
+    unsub_ev = async_track_time_interval(
+        hass,
+        _ev_control,
+        timedelta(seconds=EV_INTERVAL_SECONDS),
+    )
+
     entry.async_on_unload(unsub_history)
     entry.async_on_unload(unsub_live)
     entry.async_on_unload(unsub_backfill)
+    entry.async_on_unload(unsub_ev)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     async def _delayed_start():

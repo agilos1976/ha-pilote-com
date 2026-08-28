@@ -24,6 +24,10 @@ from .const import (
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
+    CONF_EV_AMPS,
+    CONF_EV_PLUGGED,
+    CONF_EV_POWER,
+    CONF_EV_SWITCH,
     CONF_GRID_ENTITY,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_HA_TOKEN,
@@ -133,6 +137,22 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
         )
 
     schema[vol.Required(CONF_BATTERY_CHARGE_POSITIVE, default=d.get(CONF_BATTERY_CHARGE_POSITIVE, True))] = BooleanSelector()
+
+    # --- Borne de recharge (facultatif) ---
+    # Sans ces entites, le pilotage reste inactif : le plugin continue
+    # d'envoyer ses mesures, mais n'ecrit rien sur la borne.
+    schema[vol.Optional(CONF_EV_SWITCH, description={"suggested_value": d.get(CONF_EV_SWITCH, "")})] = EntitySelector(
+        EntitySelectorConfig(domain="switch")
+    )
+    schema[vol.Optional(CONF_EV_AMPS, description={"suggested_value": d.get(CONF_EV_AMPS, "")})] = EntitySelector(
+        EntitySelectorConfig(domain="number")
+    )
+    schema[vol.Optional(CONF_EV_PLUGGED, description={"suggested_value": d.get(CONF_EV_PLUGGED, "")})] = EntitySelector(
+        EntitySelectorConfig(domain="binary_sensor")
+    )
+    schema[vol.Optional(CONF_EV_POWER, description={"suggested_value": d.get(CONF_EV_POWER, "")})] = EntitySelector(
+        EntitySelectorConfig(domain="sensor", device_class="power")
+    )
 
     schema[vol.Required(CONF_UPDATE_INTERVAL, default=d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))] = NumberSelector(
         NumberSelectorConfig(min=5, max=1440, step=5, mode=NumberSelectorMode.BOX, unit_of_measurement="min")
