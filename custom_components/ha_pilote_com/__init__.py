@@ -764,6 +764,12 @@ async def async_setup_entry(
             except Exception as err:
                 _LOGGER.error("Backfill error %s→%s: %s", r_start, r_end, err)
 
+    # --- Borne de recharge : entites configurees ---
+    ev_switch  = entry.options.get(CONF_EV_SWITCH,  entry.data.get(CONF_EV_SWITCH, ""))
+    ev_amps    = entry.options.get(CONF_EV_AMPS,    entry.data.get(CONF_EV_AMPS, ""))
+    ev_plugged = entry.options.get(CONF_EV_PLUGGED, entry.data.get(CONF_EV_PLUGGED, ""))
+    ev_power   = entry.options.get(CONF_EV_POWER,   entry.data.get(CONF_EV_POWER, ""))
+
     # ------------------------------------------------------------------
     # Pilotage de la borne de recharge
     #
