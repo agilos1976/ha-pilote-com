@@ -25,9 +25,14 @@ from .const import (
     CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
     CONF_EV_AMPS,
+    CONF_EV_BRAND,
+    CONF_EV_EASEE_STATUS,
     CONF_EV_PLUGGED,
     CONF_EV_POWER,
     CONF_EV_SWITCH,
+    EV_BRAND_EASEE,
+    EV_BRAND_GENERIC,
+    EV_BRAND_NONE,
     CONF_GRID_ENTITY,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_HA_TOKEN,
@@ -141,6 +146,25 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
     # --- Borne de recharge (facultatif) ---
     # Sans ces entites, le pilotage reste inactif : le plugin continue
     # d'envoyer ses mesures, mais n'ecrit rien sur la borne.
+    #
+    # La marque choisit le pilote. Chaque marque a ses propres commandes —
+    # une Easee ne s'ecrit pas comme un simple interrupteur — et seuls les
+    # champs de la marque retenue sont a remplir ; les autres sont ignores.
+    schema[vol.Required(CONF_EV_BRAND, default=d.get(CONF_EV_BRAND, EV_BRAND_NONE))] = SelectSelector(
+        SelectSelectorConfig(
+            options=[
+                SelectOptionDict(value=EV_BRAND_NONE, label="Aucune borne pilotee"),
+                SelectOptionDict(value=EV_BRAND_GENERIC, label="Borne generique (interrupteur + amperage)"),
+                SelectOptionDict(value=EV_BRAND_EASEE, label="Easee"),
+            ],
+            mode=SelectSelectorMode.DROPDOWN,
+        )
+    )
+    # Easee : le capteur de statut suffit. Les autres entites de la borne
+    # sont retrouvees sur le meme appareil.
+    schema[vol.Optional(CONF_EV_EASEE_STATUS, description={"suggested_value": d.get(CONF_EV_EASEE_STATUS, "")})] = EntitySelector(
+        EntitySelectorConfig(domain="sensor", integration="easee")
+    )
     schema[vol.Optional(CONF_EV_SWITCH, description={"suggested_value": d.get(CONF_EV_SWITCH, "")})] = EntitySelector(
         EntitySelectorConfig(domain="switch")
     )

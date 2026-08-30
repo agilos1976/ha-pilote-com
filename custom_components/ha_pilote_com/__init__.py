@@ -28,9 +28,12 @@ from .const import (
     CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
     CONF_EV_AMPS,
+    CONF_EV_BRAND,
+    CONF_EV_EASEE_STATUS,
     CONF_EV_PLUGGED,
     CONF_EV_POWER,
     CONF_EV_SWITCH,
+    EV_BRAND_NONE,
     CONF_GRID_ENTITY,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_HA_TOKEN,
@@ -49,7 +52,6 @@ from .const import (
     EV_API_URL,
     EV_FALLBACK_HOLD_SECONDS,
     EV_INTERVAL_SECONDS,
-    EV_PHASE_SWITCH_WAIT,
     LIVE_API_URL,
     LIVE_INTERVAL_SECONDS,
 )
@@ -57,6 +59,8 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 BUCKET_MINUTES = 15
+
+from .drivers import create_driver
 
 # La plateforme switch n'expose qu'une entite : l'autorisation de
 # piloter la borne. Elle ne se cree que si une borne est configuree.
@@ -765,11 +769,19 @@ async def async_setup_entry(
             except Exception as err:
                 _LOGGER.error("Backfill error %s→%s: %s", r_start, r_end, err)
 
-    # --- Borne de recharge : entites configurees ---
-    ev_switch  = entry.options.get(CONF_EV_SWITCH,  entry.data.get(CONF_EV_SWITCH, ""))
-    ev_amps    = entry.options.get(CONF_EV_AMPS,    entry.data.get(CONF_EV_AMPS, ""))
-    ev_plugged = entry.options.get(CONF_EV_PLUGGED, entry.data.get(CONF_EV_PLUGGED, ""))
-    ev_power   = entry.options.get(CONF_EV_POWER,   entry.data.get(CONF_EV_POWER, ""))
+    # --- Borne de recharge : pilote de marque ---
+    # Le serveur decide en amperes et en phases ; le pilote traduit cette
+    # consigne dans le vocabulaire de la marque. Aucune decision ici.
+    ev_opts = {}
+    for _k in (CONF_EV_BRAND, CONF_EV_SWITCH, CONF_EV_AMPS, CONF_EV_PLUGGED,
+               CONF_EV_POWER, CONF_EV_EASEE_STATUS):
+        ev_opts[_k] = entry.options.get(_k, entry.data.get(_k, ""))
+    ev_marque = ev_opts.get(CONF_EV_BRAND) or EV_BRAND_NONE
+    ev_driver = None
+    if ev_marque != EV_BRAND_NONE:
+        ev_driver = create_driver(hass, entry, ev_opts)
+        if not await ev_driver.async_prepare():
+            ev_driver = None
 
     # ------------------------------------------------------------------
     # Pilotage de la borne de recharge
@@ -804,54 +816,8 @@ async def async_setup_entry(
         st = hass.states.get(entity_id) if entity_id else None
         return st is not None and st.state == "on"
 
-    async def _ev_apply(amperes, phases):
-        """Écrit la consigne sur la borne, uniquement si elle change.
-
-        Réécrire la même valeur toutes les 30 s use la mémoire de la borne et
-        génère du trafic pour rien.
-        """
-        if amperes and amperes > 0:
-            # Bascule de phases : la plupart des bornes exigent un arrêt, une
-            # pause, puis un redémarrage — pas une simple écriture.
-            if ev_state["phases"] is not None and phases != ev_state["phases"] and ev_switch:
-                await hass.services.async_call(
-                    "switch", "turn_off", {"entity_id": ev_switch}, blocking=True)
-                await asyncio.sleep(EV_PHASE_SWITCH_WAIT)
-                ev_state["on"] = False
-            if ev_amps and amperes != ev_state["amps"]:
-                await hass.services.async_call(
-                    "number", "set_value",
-                    {"entity_id": ev_amps, "value": amperes}, blocking=True)
-            if ev_switch and ev_state["on"] is not True:
-                await hass.services.async_call(
-                    "switch", "turn_on", {"entity_id": ev_switch}, blocking=True)
-                ev_state["on"] = True
-            ev_state["amps"] = amperes
-            ev_state["phases"] = phases
-        else:
-            # Redescendre l'amperage AVANT de couper, et le faire meme
-            # sans switch configure : beaucoup de bornes s'arretent sur
-            # une consigne nulle, et sans cela une installation declaree
-            # avec le seul "number" n'avait aucun moyen de stopper.
-            if ev_amps and ev_state["amps"] != 0:
-                vmin = 0.0
-                st = hass.states.get(ev_amps)
-                if st is not None:
-                    try:
-                        vmin = float(st.attributes.get("min", 0) or 0)
-                    except (TypeError, ValueError):
-                        vmin = 0.0
-                await hass.services.async_call(
-                    "number", "set_value",
-                    {"entity_id": ev_amps, "value": vmin}, blocking=True)
-            if ev_switch and ev_state["on"] is not False:
-                await hass.services.async_call(
-                    "switch", "turn_off", {"entity_id": ev_switch}, blocking=True)
-                ev_state["on"] = False
-            ev_state["amps"] = 0
-
     async def _ev_control(_now=None):
-        if not ev_switch and not ev_amps:
+        if ev_driver is None:
             return
 
         store = hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})
@@ -874,26 +840,9 @@ async def async_setup_entry(
         # on n'y touche plus. La laisser coupee priverait l'utilisateur
         # de recharge sans motif visible.
         if not actif:
-            if store.pop("ev_release", False) and ev_state["amps"] is not None:
-                if ev_amps:
-                    st = hass.states.get(ev_amps)
-                    vmax = None
-                    if st is not None:
-                        try:
-                            vmax = float(st.attributes.get("max"))
-                        except (TypeError, ValueError):
-                            vmax = None
-                    if vmax:
-                        await hass.services.async_call(
-                            "number", "set_value",
-                            {"entity_id": ev_amps, "value": vmax}, blocking=True)
-                if ev_switch:
-                    await hass.services.async_call(
-                        "switch", "turn_on", {"entity_id": ev_switch}, blocking=True)
+            if store.pop("ev_release", False) and ev_driver.amps is not None:
+                await ev_driver.release()
                 _LOGGER.info("Pilotage VE desactive : borne rendue a l'utilisateur")
-                ev_state["amps"] = None
-                ev_state["phases"] = None
-                ev_state["on"] = None
             return
 
         loop_now = asyncio.get_event_loop().time()
@@ -910,8 +859,8 @@ async def async_setup_entry(
             # api.php résout l'user_id depuis la clé : le plugin n'a pas d'id.
             "api_key": api_key,
             "grid": round(grid_w),
-            "ev": round(_num(ev_power)),
-            "plugged": "1" if (not ev_plugged or _is_on(ev_plugged)) else "0",
+            "ev": round(ev_driver.power_w() or 0.0),
+            "plugged": "0" if ev_driver.plugged() is False else "1",
             "bat": round(_num(battery_entity)),
             "bat_soc": round(_num(battery_soc_entity)),
         }
@@ -938,7 +887,7 @@ async def async_setup_entry(
             # tourner indefiniment, alors que Pilote est cense la piloter.
             if (loop_now - ev_state["last_ok"]) > EV_FALLBACK_HOLD_SECONDS:
                 _LOGGER.warning("Pilotage VE : serveur injoignable (%s), arrêt de la charge", err)
-                await _ev_apply(0, ev_state["phases"])
+                await ev_driver.apply(0, ev_driver.phases or 0)
             ev_state["next_call"] = loop_now + EV_INTERVAL_SECONDS
             return
 
@@ -950,21 +899,22 @@ async def async_setup_entry(
         cible = int(data.get("amperes", 0) or 0)
         # Trace sur changement seulement : le detail de la decision vient
         # du serveur, sans lui un arret est indechiffrable cote HA.
-        if cible != ev_state["amps"]:
+        if cible != ev_driver.amps:
             _LOGGER.info(
                 "Pilotage VE : %s A (%s) — %s",
                 cible, data.get("source", "?"), data.get("reason", ""),
             )
-        await _ev_apply(cible, int(data.get("phases", 0) or 0))
+        await ev_driver.apply(cible, int(data.get("phases", 0) or 0))
         ev_state["next_call"] = loop_now + float(data.get("poll_in") or EV_INTERVAL_SECONDS)
 
-    if ev_switch or ev_amps:
-        _LOGGER.info(
-            "Pilotage VE configure : switch=%s amperage=%s branche=%s puissance=%s",
-            ev_switch or "-", ev_amps or "-", ev_plugged or "-", ev_power or "-",
-        )
+    if ev_driver is not None:
+        _LOGGER.info("Pilotage VE : borne %s", ev_driver.describe())
+    elif ev_marque == EV_BRAND_NONE:
+        _LOGGER.info("Pilotage VE inactif : aucune borne selectionnee")
     else:
-        _LOGGER.info("Pilotage VE inactif : aucune entite de borne configuree")
+        _LOGGER.warning(
+            "Pilotage VE inactif : la borne %s n'a pas pu etre initialisee",
+            ev_marque)
 
     unsub_history = async_track_time_interval(
         hass,

@@ -24,6 +24,21 @@ CONF_EV_SWITCH = "ev_switch"          # switch marche/arret de la borne
 CONF_EV_AMPS = "ev_amps"              # number : consigne d'amperage
 CONF_EV_PLUGGED = "ev_plugged"        # binary_sensor : cable branche
 CONF_EV_POWER = "ev_power"            # sensor : puissance instantanee de la borne
+
+# Marque de la borne. Le serveur decide toujours en amperes et en phases ;
+# c'est le pilote de marque qui traduit cette consigne. Une borne inconnue
+# reste pilotable en "generic" tant qu'elle expose un interrupteur et un
+# reglage d'amperage.
+CONF_EV_BRAND = "ev_brand"
+EV_BRAND_NONE = "none"
+EV_BRAND_GENERIC = "generic"
+EV_BRAND_EASEE = "easee"
+EV_BRANDS = [EV_BRAND_NONE, EV_BRAND_GENERIC, EV_BRAND_EASEE]
+
+# Easee : une seule entite a designer, le capteur de statut. Les services
+# Easee s'adressent a un appareil, que le registre donne depuis l'entite ;
+# les autres entites de la borne sont sur ce meme appareil.
+CONF_EV_EASEE_STATUS = "ev_easee_status"
 DEFAULT_UPDATE_INTERVAL = 15
 
 API_URL = "https://carrard.ch/pilote/api/post_data_user.php"
