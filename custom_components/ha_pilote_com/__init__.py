@@ -905,6 +905,14 @@ async def async_setup_entry(
         pw_borne = ev_driver.power_w()
         if pw_borne is not None:
             params["ev"] = round(pw_borne)
+        # Compte rendu de l'ecriture precedente. Sans lui, une consigne qui
+        # n'atteint pas la borne est invisible depuis le cockpit : le serveur
+        # affiche « 16 A autorises » pendant que rien ne se passe, et la
+        # cause ne vit que dans les journaux de Home Assistant.
+        if ev_driver.amps is not None:
+            params["applied"] = int(ev_driver.amps)
+        if ev_state.get("last_err"):
+            params["err"] = str(ev_state["last_err"])[:180]
 
         try:
             async with aiohttp.ClientSession() as session:
