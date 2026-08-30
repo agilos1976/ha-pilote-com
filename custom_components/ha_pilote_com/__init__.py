@@ -899,6 +899,16 @@ async def async_setup_entry(
             "bat": round(_num(battery_entity)),
             "bat_soc": round(_num(battery_soc_entity)),
         }
+        # Production solaire. Le serveur en a besoin pour distinguer
+        # « le soleil faiblit » de « il n'y a plus de soleil » : le surplus
+        # seul ne sait pas les separer, une maison qui consomme tout donne
+        # zero de surplus en plein midi comme en pleine nuit.
+        st_pv = hass.states.get(production_entity) if production_entity else None
+        if st_pv is not None and st_pv.state not in ("unknown", "unavailable", "", None):
+            try:
+                params["pv"] = round(float(st_pv.state))
+            except (TypeError, ValueError):
+                pass
         # Puissance de borne omise si inconnue. Presente et nulle, elle
         # signifie "la voiture ne prend rien" et arme la detection de refus ;
         # absente, elle ne prouve rien et le serveur s'abstient.
