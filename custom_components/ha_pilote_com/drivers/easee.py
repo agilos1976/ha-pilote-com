@@ -225,6 +225,12 @@ class EaseeDriver(WallboxDriver):
     # ------------------------------------------------------------------
 
     async def _svc(self, service, data):
+        # Chaque ecriture est tracee. Par conception elles sont rares : une
+        # consigne stable ne doit rien produire ici. Si le journal en montre
+        # toutes les dix secondes, c'est que quelqu'un d'autre bouscule la
+        # borne — et le savoir vaut mieux que de le deduire.
+        _LOGGER.info("Easee <- %s %s", service,
+                     " ".join("%s=%s" % (k, v) for k, v in data.items()))
         await self.hass.services.async_call(
             "easee", service, dict(data, device_id=self.device_id), blocking=True)
 
@@ -309,7 +315,14 @@ class EaseeDriver(WallboxDriver):
             # 'ready_to_charge' tant que la voiture n'a pas repris la main :
             # renvoyer 'start' a chaque cycle de 10 s inonde l'API Easee et
             # relance une negociation que le vehicule n'a pas fini de refuser.
-            if self._statut() != "charging":
+            # Ouvrir la session seulement si rien ne circule. Le statut passe
+            # par 'ready_to_charge' a chaque renegociation, y compris quand la
+            # voiture charge tres bien : renvoyer 'start' a ce moment-la relance
+            # une negociation dont personne n'avait besoin, et c'est precisement
+            # ce que montrent les allers-retours du journal Easee.
+            pw = self.power_w()
+            circule = (pw is not None and pw > 200)
+            if self._statut() != "charging" and not circule:
                 maintenant = time.monotonic()
                 if maintenant - self.dernier_start >= START_MIN_INTERVAL:
                     await self._svc("action_command", {"action_command": "start"})
