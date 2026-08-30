@@ -808,6 +808,8 @@ async def async_setup_entry(
         "next_call": 0.0,   # monotonic
         "last_ok": None,    # renseigne au premier cycle
         "last_err": None,   # derniere erreur signalee, pour ne pas la repeter
+        "mut_since": None,  # depuis quand du courant est offert sans rien tirer
+        "mut_dit": False,   # le silence a-t-il deja ete signale
     }
 
     def _num(entity_id, default=0.0):
@@ -925,6 +927,28 @@ async def async_setup_entry(
                 ev_state["last_err"] = str(err)
         else:
             ev_state["last_err"] = None
+
+        # Offrir du courant ne garantit pas qu'il circule : la voiture peut
+        # avoir clos sa session, ou refuser sur une charge differee. Sans ce
+        # controle, le plugin croit piloter une charge qui n'existe pas et
+        # rien ne le dit — c'est a la borne qu'on le demande, elle seule
+        # mesure ce qui passe reellement.
+        pw = ev_driver.power_w()
+        if cible >= 6 and pw is not None and pw < 200:
+            if ev_state["mut_since"] is None:
+                ev_state["mut_since"] = loop_now
+            elif (not ev_state["mut_dit"]
+                  and loop_now - ev_state["mut_since"] > 300):
+                _LOGGER.warning(
+                    "Pilotage VE : %s A offerts sur %s phase(s) depuis 5 min et "
+                    "%s W mesures a la borne. La borne applique la consigne ; "
+                    "c'est le vehicule qui ne la prend pas — charge differee "
+                    "active, session close, ou cable a rebrancher.",
+                    cible, data.get("phases", "?"), int(pw))
+                ev_state["mut_dit"] = True
+        else:
+            ev_state["mut_since"] = None
+            ev_state["mut_dit"] = False
         ev_state["next_call"] = loop_now + float(data.get("poll_in") or EV_INTERVAL_SECONDS)
 
     if ev_driver is not None:
