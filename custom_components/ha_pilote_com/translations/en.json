@@ -19,7 +19,8 @@
           "battery_charge_positive": "Battery meters are correctly assigned",
           "update_interval": "Update interval",
           "ha_url": "Home Assistant URL",
-          "ha_token": "Home Assistant Token"
+          "ha_token": "Home Assistant Token",
+          "ev_brand": "Charging station"
         },
         "data_description": {
           "api_key": "Your Romande Dynamics API key",
@@ -36,7 +37,8 @@
           "battery_charge_positive": "Uncheck if your charge and discharge battery meters are swapped",
           "update_interval": "Data sending frequency in minutes (15 min recommended)",
           "ha_url": "External URL (e.g. https://my-ha.duckdns.org) — for remote live display",
-          "ha_token": "Long-lived token for live via WebSocket"
+          "ha_token": "Long-lived token for live via WebSocket",
+          "ev_brand": "Pick your brand so Pilote knows how to drive it. The entities to fill in are asked next, and depend on this choice."
         }
       },
       "reconfigure": {
@@ -57,7 +59,8 @@
           "battery_charge_positive": "Battery meters are correctly assigned",
           "update_interval": "Update interval",
           "ha_url": "Home Assistant URL",
-          "ha_token": "Home Assistant Token"
+          "ha_token": "Home Assistant Token",
+          "ev_brand": "Charging station"
         },
         "data_description": {
           "api_key": "Your Romande Dynamics API key",
@@ -74,7 +77,26 @@
           "battery_charge_positive": "Uncheck if your charge and discharge battery meters are swapped",
           "update_interval": "Data sending frequency in minutes (15 min recommended)",
           "ha_url": "External URL (e.g. https://my-ha.duckdns.org) — for remote live display",
-          "ha_token": "Long-lived token for live via WebSocket"
+          "ha_token": "Long-lived token for live via WebSocket",
+          "ev_brand": "Pick your brand so Pilote knows how to drive it. The entities to fill in are asked next, and depend on this choice."
+        }
+      },
+      "wallbox": {
+        "title": "Charging station",
+        "description": "Entities of the selected station. Pilote decides the current and the number of phases from your tariffs, the solar forecast and the battery plan; these entities only carry out its decision.",
+        "data": {
+          "ev_easee_status": "Easee — status sensor",
+          "ev_switch": "Station — on/off switch",
+          "ev_amps": "Station — current setpoint",
+          "ev_plugged": "Station — cable plugged in",
+          "ev_power": "Station — charging power (W)"
+        },
+        "data_description": {
+          "ev_easee_status": "The only field needed: Pilote finds the power, link state and switches by itself on the same device.",
+          "ev_switch": "Switch that starts and stops charging",
+          "ev_amps": "Number entity giving the charging current in amperes",
+          "ev_plugged": "Sensor telling that a vehicle is plugged in (optional)",
+          "ev_power": "Instant power delivered by the station (optional)"
         }
       }
     },

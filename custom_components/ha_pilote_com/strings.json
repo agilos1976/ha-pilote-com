@@ -19,7 +19,8 @@
           "battery_charge_positive": "Compteurs batterie dans le bon sens",
           "update_interval": "Intervalle de mise à jour",
           "ha_url": "URL Home Assistant",
-          "ha_token": "Token Home Assistant"
+          "ha_token": "Token Home Assistant",
+          "ev_brand": "Borne de recharge"
         },
         "data_description": {
           "api_key": "Votre clé API Romande Dynamics",
@@ -36,7 +37,8 @@
           "battery_charge_positive": "Décochez si vos compteurs charge et décharge batterie sont inversés",
           "update_interval": "Fréquence d'envoi des données en minutes (15 min recommandé)",
           "ha_url": "URL externe (ex: https://mon-ha.duckdns.org) — pour le live à distance",
-          "ha_token": "Token longue durée pour le live via WebSocket"
+          "ha_token": "Token longue durée pour le live via WebSocket",
+          "ev_brand": "Choisissez votre marque pour que Pilote sache la commander. Les entités à renseigner sont demandées ensuite, et dépendent de ce choix."
         }
       },
       "reconfigure": {
@@ -57,7 +59,8 @@
           "battery_charge_positive": "Compteurs batterie dans le bon sens",
           "update_interval": "Intervalle de mise à jour",
           "ha_url": "URL Home Assistant",
-          "ha_token": "Token Home Assistant"
+          "ha_token": "Token Home Assistant",
+          "ev_brand": "Borne de recharge"
         },
         "data_description": {
           "api_key": "Votre clé API Romande Dynamics",
@@ -74,7 +77,26 @@
           "battery_charge_positive": "Décochez si vos compteurs charge et décharge batterie sont inversés",
           "update_interval": "Fréquence d'envoi des données en minutes (15 min recommandé)",
           "ha_url": "URL externe (ex: https://mon-ha.duckdns.org) — pour le live à distance",
-          "ha_token": "Token longue durée pour le live via WebSocket"
+          "ha_token": "Token longue durée pour le live via WebSocket",
+          "ev_brand": "Choisissez votre marque pour que Pilote sache la commander. Les entités à renseigner sont demandées ensuite, et dépendent de ce choix."
+        }
+      },
+      "wallbox": {
+        "title": "Borne de recharge",
+        "description": "Entités de la borne sélectionnée. Pilote décide de l'ampérage et des phases d'après vos tarifs, la prévision solaire et le planning batterie ; ces entités ne servent qu'à appliquer sa décision.",
+        "data": {
+          "ev_easee_status": "Easee — capteur de statut",
+          "ev_switch": "Borne — interrupteur marche/arrêt",
+          "ev_amps": "Borne — consigne d'ampérage",
+          "ev_plugged": "Borne — câble branché",
+          "ev_power": "Borne — puissance de charge (W)"
+        },
+        "data_description": {
+          "ev_easee_status": "Le seul champ nécessaire : Pilote retrouve seul la puissance, l'état du lien et les interrupteurs sur le même appareil.",
+          "ev_switch": "Interrupteur qui démarre et arrête la charge",
+          "ev_amps": "Nombre réglable donnant le courant de charge en ampères",
+          "ev_plugged": "Capteur indiquant qu'un véhicule est branché (facultatif)",
+          "ev_power": "Puissance instantanée délivrée par la borne (facultatif)"
         }
       }
     },

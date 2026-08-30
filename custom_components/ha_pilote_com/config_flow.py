@@ -160,23 +160,9 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
             mode=SelectSelectorMode.DROPDOWN,
         )
     )
-    # Easee : le capteur de statut suffit. Les autres entites de la borne
-    # sont retrouvees sur le meme appareil.
-    schema[vol.Optional(CONF_EV_EASEE_STATUS, description={"suggested_value": d.get(CONF_EV_EASEE_STATUS, "")})] = EntitySelector(
-        EntitySelectorConfig(domain="sensor", integration="easee")
-    )
-    schema[vol.Optional(CONF_EV_SWITCH, description={"suggested_value": d.get(CONF_EV_SWITCH, "")})] = EntitySelector(
-        EntitySelectorConfig(domain="switch")
-    )
-    schema[vol.Optional(CONF_EV_AMPS, description={"suggested_value": d.get(CONF_EV_AMPS, "")})] = EntitySelector(
-        EntitySelectorConfig(domain="number")
-    )
-    schema[vol.Optional(CONF_EV_PLUGGED, description={"suggested_value": d.get(CONF_EV_PLUGGED, "")})] = EntitySelector(
-        EntitySelectorConfig(domain="binary_sensor")
-    )
-    schema[vol.Optional(CONF_EV_POWER, description={"suggested_value": d.get(CONF_EV_POWER, "")})] = EntitySelector(
-        EntitySelectorConfig(domain="sensor", device_class="power")
-    )
+    # Les entites de la borne sont demandees a l'etape suivante, et
+    # seulement celles que la marque retenue reclame : afficher des champs
+    # qui seront ignores laisse croire qu'il faut les remplir.
 
     schema[vol.Required(CONF_UPDATE_INTERVAL, default=d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))] = NumberSelector(
         NumberSelectorConfig(min=5, max=1440, step=5, mode=NumberSelectorMode.BOX, unit_of_measurement="min")
@@ -370,10 +356,41 @@ class HaPiloteComOptionsFlow(OptionsFlow):
         return vol.Schema(schema)
 
 
+def _wallbox_schema(marque: str, defaults: dict | None = None) -> vol.Schema:
+    """Champs propres a la marque retenue, et rien d'autre."""
+    d = defaults or {}
+    schema: dict = {}
+    if marque == EV_BRAND_EASEE:
+        # Un seul champ : les services Easee s'adressent a un appareil, que
+        # le registre donne depuis l'entite, et les autres entites de la
+        # borne sont sur ce meme appareil.
+        schema[vol.Optional(CONF_EV_EASEE_STATUS, description={"suggested_value": d.get(CONF_EV_EASEE_STATUS, "")})] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", integration="easee")
+        )
+    elif marque == EV_BRAND_GENERIC:
+        schema[vol.Optional(CONF_EV_SWITCH, description={"suggested_value": d.get(CONF_EV_SWITCH, "")})] = EntitySelector(
+            EntitySelectorConfig(domain="switch")
+        )
+        schema[vol.Optional(CONF_EV_AMPS, description={"suggested_value": d.get(CONF_EV_AMPS, "")})] = EntitySelector(
+            EntitySelectorConfig(domain="number")
+        )
+        schema[vol.Optional(CONF_EV_PLUGGED, description={"suggested_value": d.get(CONF_EV_PLUGGED, "")})] = EntitySelector(
+            EntitySelectorConfig(domain="binary_sensor")
+        )
+        schema[vol.Optional(CONF_EV_POWER, description={"suggested_value": d.get(CONF_EV_POWER, "")})] = EntitySelector(
+            EntitySelectorConfig(domain="sensor", device_class="power")
+        )
+    return vol.Schema(schema)
+
+
 class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for HA Pilote Com."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        self._donnees: dict = {}
+        self._reconfigure = False
 
     @staticmethod
     def async_get_options_flow(config_entry):
@@ -387,15 +404,29 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
                 user_input.setdefault(key, "")
             await self.async_set_unique_id(user_input[CONF_API_KEY])
             self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title="HA Pilote Com",
-                data=user_input,
-            )
+            self._donnees = user_input
+            return await self.async_step_wallbox()
 
         return self.async_show_form(
             step_id="user",
             data_schema=_user_schema(),
         )
+
+    async def async_step_wallbox(
+        self, user_input: dict | None = None
+    ) -> ConfigFlowResult:
+        """Entites de la borne, selon la marque retenue a l'etape precedente."""
+        marque = self._donnees.get(CONF_EV_BRAND, EV_BRAND_NONE)
+        schema = _wallbox_schema(marque, self._donnees)
+        # Aucune borne : rien a demander, on ne montre pas un formulaire vide.
+        if user_input is None and schema.schema:
+            return self.async_show_form(step_id="wallbox", data_schema=schema)
+        donnees = dict(self._donnees)
+        donnees.update(user_input or {})
+        if self._reconfigure:
+            return self.async_update_reload_and_abort(
+                self._get_reconfigure_entry(), data=donnees)
+        return self.async_create_entry(title="HA Pilote Com", data=donnees)
 
     async def async_step_reconfigure(
         self, user_input: dict | None = None
@@ -403,10 +434,12 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             for key in (CONF_PRODUCTION_ENTITY, CONF_BATTERY_ENTITY, CONF_BATTERY_SOC_ENTITY, CONF_METER_PRODUCTION, CONF_METER_IMPORT, CONF_METER_EXPORT, CONF_METER_BATTERY_CHARGE, CONF_METER_BATTERY_DISCHARGE):
                 user_input.setdefault(key, "")
-            return self.async_update_reload_and_abort(
-                self._get_reconfigure_entry(),
-                data=user_input,
-            )
+            # Les entites deja enregistrees servent de valeurs proposees a
+            # l'etape suivante ; changer de marque n'efface pas les autres.
+            self._donnees = dict(self._get_reconfigure_entry().data)
+            self._donnees.update(user_input)
+            self._reconfigure = True
+            return await self.async_step_wallbox()
 
         return self.async_show_form(
             step_id="reconfigure",
