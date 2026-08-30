@@ -269,13 +269,34 @@ class EaseeDriver(WallboxDriver):
                     "switch", "turn_on", {"entity_id": eid}, blocking=True)
 
             if phases and phases != self.phases:
-                # Easee encaisse la bascule sans arret prealable, contrairement
-                # a une borne pilotee par un simple interrupteur.
+                # Le nombre de phases alimentees ne se change pas en cours de
+                # session : le signal pilote ne le transporte pas, la voiture
+                # continue sur la configuration negociee au demarrage. J'avais
+                # ecrit ici qu'Easee encaissait la bascule a chaud — c'etait une
+                # affirmation, pas une verification, et la voiture restait sur
+                # l'ancienne configuration.
+                #
+                # On coupe donc le pilote, on change, puis on rouvre. Les
+                # automatisations d'origine de l'utilisateur font de meme : elles
+                # reglent le mode AVANT le start, jamais pendant.
+                en_charge = self._statut() == "charging"
+                if en_charge:
+                    await self._svc("action_command", {"action_command": "pause"})
+                    await asyncio.sleep(3)
                 await self._svc(
                     "set_charger_phase_mode",
                     {"phase_mode": "3_phase" if phases >= 3 else "1_phase"})
                 await asyncio.sleep(5)
                 self.phases = phases
+                if en_charge:
+                    await self._svc("action_command", {"action_command": "resume"})
+                    await asyncio.sleep(2)
+                    await self._svc("action_command", {"action_command": "start"})
+                    self.dernier_start = time.monotonic()
+                    self.paused = False
+                    # La consigne de courant sera reecrite ci-dessous : la
+                    # reouverture de session la remet parfois au calibre.
+                    self.amps = None
 
             if amperes != self.amps:
                 await self._limite(amperes)
