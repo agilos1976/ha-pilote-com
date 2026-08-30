@@ -389,6 +389,9 @@ class HaPiloteComConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
+        # super() indispensable : FlowHandler initialise ses propres
+        # attributs, et l'omettre casse le flux de facon obscure.
+        super().__init__()
         self._donnees: dict = {}
         self._reconfigure = False
 
