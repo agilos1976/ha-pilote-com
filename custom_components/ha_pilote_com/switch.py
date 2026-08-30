@@ -10,7 +10,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import CONF_EV_AMPS, CONF_EV_SWITCH, DOMAIN
+from .const import (
+    CONF_EV_AMPS,
+    CONF_EV_BRAND,
+    CONF_EV_SWITCH,
+    DOMAIN,
+    EV_BRAND_GENERIC,
+    EV_BRAND_NONE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,10 +27,25 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Cree l'interrupteur, uniquement si une borne est configuree."""
-    ev_switch = entry.options.get(CONF_EV_SWITCH, entry.data.get(CONF_EV_SWITCH, ""))
-    ev_amps = entry.options.get(CONF_EV_AMPS, entry.data.get(CONF_EV_AMPS, ""))
-    if not ev_switch and not ev_amps:
+    """Cree l'interrupteur, uniquement si une borne est declaree.
+
+    La condition porte sur la MARQUE, pas sur les entites d'une marque
+    particuliere. Elle regardait auparavant les entites generiques, si bien
+    qu'une borne Easee — qui n'en renseigne aucune — ne recevait pas
+    d'interrupteur : le pilotage devenait impossible a activer, sans que rien
+    ne l'explique.
+    """
+    marque = entry.options.get(CONF_EV_BRAND, entry.data.get(CONF_EV_BRAND, ""))
+    if not marque:
+        # Configuration anterieure au choix de marque : on se rabat sur les
+        # entites generiques, seule declaration de borne qui existait alors.
+        marque = (
+            EV_BRAND_GENERIC
+            if entry.options.get(CONF_EV_SWITCH, entry.data.get(CONF_EV_SWITCH, ""))
+            or entry.options.get(CONF_EV_AMPS, entry.data.get(CONF_EV_AMPS, ""))
+            else EV_BRAND_NONE
+        )
+    if marque == EV_BRAND_NONE:
         # Sans borne declaree l'interrupteur n'aurait rien a piloter : mieux
         # vaut pas d'entite du tout qu'une entite sans effet.
         return

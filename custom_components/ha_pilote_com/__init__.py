@@ -779,8 +779,17 @@ async def async_setup_entry(
     ev_marque = ev_opts.get(CONF_EV_BRAND) or EV_BRAND_NONE
     ev_driver = None
     if ev_marque != EV_BRAND_NONE:
-        ev_driver = create_driver(hass, entry, ev_opts)
-        if not await ev_driver.async_prepare():
+        # Un pilote qui echoue ne doit jamais emporter l'integration : elle
+        # transmet aussi les mesures solaires, et son echec priverait
+        # l'utilisateur de l'interrupteur meme qui permet de tout arreter.
+        try:
+            ev_driver = create_driver(hass, entry, ev_opts)
+            if not await ev_driver.async_prepare():
+                ev_driver = None
+        except Exception:  # noqa: BLE001 — aucune raison ne justifie de tomber
+            _LOGGER.exception(
+                "Pilotage VE : la borne %s n'a pas pu etre initialisee ; "
+                "le reste de l'integration continue", ev_marque)
             ev_driver = None
 
     # ------------------------------------------------------------------
@@ -798,6 +807,7 @@ async def async_setup_entry(
         "on": None,
         "next_call": 0.0,   # monotonic
         "last_ok": None,    # renseigne au premier cycle
+        "last_err": None,   # derniere erreur signalee, pour ne pas la repeter
     }
 
     def _num(entity_id, default=0.0):
@@ -904,7 +914,17 @@ async def async_setup_entry(
                 "Pilotage VE : %s A (%s) — %s",
                 cible, data.get("source", "?"), data.get("reason", ""),
             )
-        await ev_driver.apply(cible, int(data.get("phases", 0) or 0))
+        try:
+            await ev_driver.apply(cible, int(data.get("phases", 0) or 0))
+        except Exception as err:  # noqa: BLE001
+            # Service indisponible, borne hors ligne, entite disparue : on
+            # le dit une fois et on retente au cycle suivant plutot que de
+            # laisser une trace illisible a chaque tick.
+            if str(err) != ev_state.get("last_err"):
+                _LOGGER.warning("Pilotage VE : consigne non appliquee (%s)", err)
+                ev_state["last_err"] = str(err)
+        else:
+            ev_state["last_err"] = None
         ev_state["next_call"] = loop_now + float(data.get("poll_in") or EV_INTERVAL_SECONDS)
 
     if ev_driver is not None:
