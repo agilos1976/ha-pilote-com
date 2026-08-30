@@ -863,19 +863,48 @@ async def async_setup_entry(
         if loop_now < ev_state["next_call"]:
             return
 
-        grid_w = _num(grid_entity)
+        # Zero n'est pas "je ne sais pas". Envoye comme mesure, il signifie
+        # pour le serveur "la maison est a l'equilibre, aucun surplus", et
+        # fait tomber la charge. Apres un redemarrage de Home Assistant les
+        # entites sont indisponibles plusieurs minutes : c'est exactement le
+        # moment ou il ne faut rien affirmer. On saute le cycle.
+        st_grid = hass.states.get(grid_entity) if grid_entity else None
+        if st_grid is None or st_grid.state in ("unknown", "unavailable", "", None):
+            if not ev_state.get("grid_muet"):
+                _LOGGER.info(
+                    "Pilotage VE en attente : %s est indisponible. Aucune "
+                    "consigne ne sera envoyee tant que le reseau n'est pas mesure.",
+                    grid_entity or "(aucune entite reseau)")
+                ev_state["grid_muet"] = True
+            ev_state["next_call"] = loop_now + EV_INTERVAL_SECONDS
+            return
+        if ev_state.get("grid_muet"):
+            _LOGGER.info("Pilotage VE : mesure reseau retablie")
+            ev_state["grid_muet"] = False
+
+        try:
+            grid_w = float(st_grid.state)
+        except (TypeError, ValueError):
+            ev_state["next_call"] = loop_now + EV_INTERVAL_SECONDS
+            return
         if not grid_import_positive:
             grid_w = -grid_w
+
         params = {
             "action": "getEvPower",
             # api.php résout l'user_id depuis la clé : le plugin n'a pas d'id.
             "api_key": api_key,
             "grid": round(grid_w),
-            "ev": round(ev_driver.power_w() or 0.0),
             "plugged": "0" if ev_driver.plugged() is False else "1",
             "bat": round(_num(battery_entity)),
             "bat_soc": round(_num(battery_soc_entity)),
         }
+        # Puissance de borne omise si inconnue. Presente et nulle, elle
+        # signifie "la voiture ne prend rien" et arme la detection de refus ;
+        # absente, elle ne prouve rien et le serveur s'abstient.
+        pw_borne = ev_driver.power_w()
+        if pw_borne is not None:
+            params["ev"] = round(pw_borne)
 
         try:
             async with aiohttp.ClientSession() as session:
