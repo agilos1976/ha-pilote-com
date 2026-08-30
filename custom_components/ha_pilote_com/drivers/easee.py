@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from homeassistant.helpers import entity_registry as er
 
@@ -31,6 +32,9 @@ from . import WallboxDriver
 from ..const import CONF_EV_EASEE_STATUS
 
 _LOGGER = logging.getLogger(__name__)
+
+# Intervalle minimal entre deux commandes d'ouverture de session.
+START_MIN_INTERVAL = 60
 
 # Statuts pour lesquels aucun vehicule n'est presente a la borne.
 HORS_SESSION = ("disconnected", "unavailable", "unknown", "none", "")
@@ -96,6 +100,7 @@ class EaseeDriver(WallboxDriver):
         self.device_id = None
         self.e = {}
         self.paused = None
+        self.dernier_start = 0.0
 
     # ------------------------------------------------------------------
     # Resolution
@@ -279,8 +284,17 @@ class EaseeDriver(WallboxDriver):
             if self.paused:
                 await self._svc("action_command", {"action_command": "resume"})
                 self.paused = False
+            # Ouvrir la session, mais pas six fois par minute. Le statut reste
+            # 'ready_to_charge' tant que la voiture n'a pas repris la main :
+            # renvoyer 'start' a chaque cycle de 10 s inonde l'API Easee et
+            # relance une negociation que le vehicule n'a pas fini de refuser.
             if self._statut() != "charging":
-                await self._svc("action_command", {"action_command": "start"})
+                maintenant = time.monotonic()
+                if maintenant - self.dernier_start >= START_MIN_INTERVAL:
+                    await self._svc("action_command", {"action_command": "start"})
+                    self.dernier_start = maintenant
+            else:
+                self.dernier_start = 0.0
             return
 
         # Arret : on met la session en pause plutot que de la clore. Une
