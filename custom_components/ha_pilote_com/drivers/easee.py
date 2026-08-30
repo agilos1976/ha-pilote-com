@@ -35,13 +35,53 @@ _LOGGER = logging.getLogger(__name__)
 # Statuts pour lesquels aucun vehicule n'est presente a la borne.
 HORS_SESSION = ("disconnected", "unavailable", "unknown", "none", "")
 
-# Suffixes d'entity_id cherches sur l'appareil. L'integration Easee est
-# traduite : on accepte les deux langues plutot que d'imposer une locale.
-SUFFIXES = {
-    "power":  ("_puissance", "_power"),
-    "online": ("_en_ligne", "_online"),
-    "enable": ("_chargeur_active", "_enabled", "_is_enabled"),
-    "smart":  ("_recharge_intelligente", "_smart_charging"),
+# Comment reconnaitre les entites voisines sur l'appareil. Trois couches, de
+# la plus fiable a la plus faible :
+#
+#   1. unique_id — pose par l'integration, invisible et non modifiable par
+#      l'utilisateur, identique quelle que soit la langue de l'interface.
+#   2. device_class — semantique standard de Home Assistant, elle aussi
+#      independante de la langue et du nom donne a l'entite.
+#   3. entity_id — dernier recours seulement : il derive du nom au moment de
+#      la creation, donc de la locale, et se renomme librement.
+#
+# La premiere couche qui repond l'emporte. Se fier au seul entity_id, comme
+# je l'avais d'abord fait, revient a parier sur la langue de l'utilisateur et
+# sur le fait qu'il n'a jamais renomme ses entites.
+RESOLUTION = {
+    "power": {
+        "domaine": "sensor",
+        "unique":  ("_power", "_totalpower", "_total_power"),
+        "classe":  ("power",),
+        "suffixe": ("_puissance_totale_borne", "_puissance", "_power"),
+    },
+    "online": {
+        "domaine": "binary_sensor",
+        "unique":  ("_online", "_isonline"),
+        "classe":  ("connectivity",),
+        "suffixe": ("_en_ligne", "_online"),
+    },
+    "enable": {
+        "domaine": "switch",
+        "unique":  ("_isenabled", "_is_enabled", "_enabled"),
+        "classe":  (),
+        "suffixe": ("_chargeur_active", "_enabled", "_is_enabled"),
+    },
+    "smart":  {
+        "domaine": "switch",
+        "unique":  ("_smartcharging", "_smart_charging"),
+        "classe":  (),
+        "suffixe": ("_recharge_intelligente", "_smart_charging"),
+    },
+}
+
+
+# Ce que l'on perd si une entite n'est pas reconnue.
+DEGRADATION = {
+    "power":  "la mesure de puissance envoyee au serveur",
+    "online":  "la detection de borne hors ligne",
+    "enable":  "le reveil de la borne si elle a ete desactivee",
+    "smart":   "la garantie que la recharge intelligente Easee ne reprend pas la main",
 }
 
 
@@ -75,19 +115,56 @@ class EaseeDriver(WallboxDriver):
             return False
         self.device_id = ent.device_id
 
-        for role, suffixes in SUFFIXES.items():
-            for e in er.async_entries_for_device(
-                    reg, self.device_id, include_disabled_entities=False):
-                if any(e.entity_id.endswith(s) for s in suffixes):
-                    self.e[role] = e.entity_id
-                    break
+        voisines = [
+            e for e in er.async_entries_for_device(
+                reg, self.device_id, include_disabled_entities=False)
+            if e.entity_id != self.status
+        ]
+        for role, r in RESOLUTION.items():
+            trouve = self._resoudre(voisines, r)
+            if trouve:
+                self.e[role] = trouve
 
+        manquant = [r for r in RESOLUTION if r not in self.e]
         _LOGGER.info(
             "Easee : statut=%s puissance=%s lien=%s actif=%s intelligente=%s",
             self.status, self.e.get("power", "-"), self.e.get("online", "-"),
             self.e.get("enable", "-"), self.e.get("smart", "-"),
         )
+        if manquant:
+            # Aucune de ces entites n'est indispensable — le pilotage marche
+            # sans, en degradant. Le dire evite de chercher longtemps pourquoi
+            # la puissance reste a zero ou la recharge intelligente reprend.
+            _LOGGER.warning(
+                "Easee : entites non reconnues sur l'appareil (%s). Le pilotage "
+                "fonctionne mais perd %s.",
+                ", ".join(manquant),
+                " et ".join(DEGRADATION[m] for m in manquant),
+            )
         return True
+
+    @staticmethod
+    def _resoudre(voisines, regle):
+        """Cherche une entite selon les trois couches, dans l'ordre."""
+        cands = [e for e in voisines if e.entity_id.startswith(regle["domaine"] + ".")]
+        for e in cands:
+            uid = (e.unique_id or "").lower()
+            if any(uid.endswith(u) for u in regle["unique"]):
+                return e.entity_id
+        if regle["classe"]:
+            classes = [
+                e for e in cands
+                if (e.device_class or e.original_device_class) in regle["classe"]
+            ]
+            # Une seule candidate : aucune ambiguite. Plusieurs capteurs de
+            # puissance sur la meme borne, on ne devine pas et on passe a la
+            # couche suivante plutot que de choisir au hasard.
+            if len(classes) == 1:
+                return classes[0].entity_id
+        for e in cands:
+            if any(e.entity_id.endswith(s) for s in regle["suffixe"]):
+                return e.entity_id
+        return None
 
     # ------------------------------------------------------------------
     # Lecture
