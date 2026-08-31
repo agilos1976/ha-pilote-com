@@ -472,6 +472,11 @@ async def async_setup_entry(
             val *= 1000
         return val
 
+    # Etat propre a l'envoi live. Il s'appuyait sur ev_state, declare bien
+    # plus bas : la fermeture le resolvait a l'execution, mais lier deux
+    # boucles sans rapport par une variable partagee est un piege.
+    live_state = {"muet": False}
+
     async def _send_live(_now=None):
         entities = {}
         for entity_id in live_entity_ids:
@@ -526,8 +531,21 @@ async def async_setup_entry(
                 ) as resp:
                     if resp.status != 200:
                         _LOGGER.warning("Live API error %s", resp.status)
-        except aiohttp.ClientError:
-            pass
+            live_state["muet"] = False
+        except asyncio.CancelledError:
+            # Home Assistant s'arrete : on laisse l'annulation remonter,
+            # l'avaler empecherait la boucle de se terminer proprement.
+            raise
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            # aiohttp.ClientError ne couvrait pas tout : un depassement de
+            # delai remonte en TimeoutError, qui n'en est pas une sous-classe,
+            # et la trace complete finissait dans le journal. Cet envoi part
+            # toutes les trois secondes : une coupure reseau d'une minute
+            # produisait vingt piles d'appels illisibles.
+            if not live_state["muet"]:
+                _LOGGER.info("Envoi live interrompu (%s) — reprise automatique",
+                             type(err).__name__)
+                live_state["muet"] = True
 
     async def _backfill(_now=None):
         """Combler les trous des derniers jours depuis le recorder HA."""
@@ -557,8 +575,11 @@ async def async_setup_entry(
                         _LOGGER.warning("Coverage API error: %s", resp.status)
                         return
                     coverage = await resp.json()
-        except aiohttp.ClientError as err:
-            _LOGGER.warning("Coverage API unreachable: %s", err)
+        # Meme faiblesse que l'envoi live : un depassement de delai remonte
+        # en TimeoutError, hors de la hierarchie ClientError, et la trace
+        # complete finissait dans le journal au lieu du message prevu.
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            _LOGGER.warning("Coverage API unreachable: %s", type(err).__name__)
             return
 
         existing = set(coverage.get("slots", []))
