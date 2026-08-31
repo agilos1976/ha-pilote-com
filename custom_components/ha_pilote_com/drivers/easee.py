@@ -35,6 +35,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # Intervalle minimal entre deux commandes d'ouverture de session.
 START_MIN_INTERVAL = 60
+# Idem pour la mise en pause, quand la borne refuse de s'arreter.
+PAUSE_MIN_INTERVAL = 60
 
 # Statuts pour lesquels aucun vehicule n'est presente a la borne.
 HORS_SESSION = ("disconnected", "unavailable", "unknown", "none", "")
@@ -101,6 +103,7 @@ class EaseeDriver(WallboxDriver):
         self.e = {}
         self.paused = None
         self.dernier_start = 0.0
+        self.dernier_pause = 0.0
 
     # ------------------------------------------------------------------
     # Resolution
@@ -334,9 +337,26 @@ class EaseeDriver(WallboxDriver):
         # Arret : on met la session en pause plutot que de la clore. Une
         # session close oblige la voiture a tout renegocier, et certaines
         # refusent de repartir sans debranchement physique.
-        if self.paused is not True:
+        #
+        # La memoire `self.paused` ne suffit pas : elle dit ce que NOUS avons
+        # demande, pas ce que la borne fait. Si quelque chose d'autre relance
+        # la charge — une automatisation, l'application Easee, la borne
+        # elle-meme — nous croyions l'avoir arretee et ne renvoyions plus rien.
+        # C'est la mesure qui tranche, pas le souvenir.
+        pw = self.power_w()
+        debite = (pw is not None and pw > 200)
+        maintenant = time.monotonic()
+        if self.paused is not True or (
+                debite and maintenant - self.dernier_pause >= PAUSE_MIN_INTERVAL):
+            if debite and self.paused is True:
+                _LOGGER.warning(
+                    "Easee : la borne delivre %.2f kW alors que Pilote demande "
+                    "l'arret. Quelque chose d'autre la commande — automatisation "
+                    "Home Assistant, application Easee, ou recharge intelligente.",
+                    pw / 1000.0)
             await self._svc("action_command", {"action_command": "pause"})
             self.paused = True
+            self.dernier_pause = maintenant
         self.amps = 0
 
     async def release(self) -> None:
