@@ -104,6 +104,19 @@ RESOLUTION = {
         "classe":  (),
         "suffixe": ("_recharge_intelligente", "_smart_charging"),
     },
+    # Easee publie lui-meme la raison pour laquelle il ne delivre rien :
+    # file d attente, aucune demande du vehicule, limite trop basse, charge
+    # programmee en attente... C est la reponse a la question qu on se pose
+    # justement quand la borne est prete et que rien ne circule. Elle est
+    # desactivee par defaut chez Home Assistant, donc absente de voisines
+    # tant que l utilisateur ne l active pas — et signalee comme manquante.
+    "raison": {
+        "domaine": "sensor",
+        "unique":  ("_reasonfornocurrent", "_reason_for_no_current"),
+        "classe":  (),
+        "suffixe": ("_raison_de_l_absence_de_courant", "_reason_for_no_current",
+                    "_raison_absence_courant"),
+    },
     "override": {
         "domaine": "button",
         "unique":  ("_override_schedule", "_overrideschedule"),
@@ -131,6 +144,7 @@ DEGRADATION = {
     "online":  "la detection de borne hors ligne",
     "enable":  "le reveil de la borne si elle a ete desactivee",
     "smart":   "la garantie que la recharge intelligente Easee ne reprend pas la main",
+    "raison":  "l explication que la borne donne quand elle ne delivre rien",
     "override": "la possibilite de passer outre une programmation de la borne",
 }
 
@@ -284,6 +298,12 @@ class EaseeDriver(WallboxDriver):
 
     def etat(self):
         return self._statut()
+
+    def raison(self):
+        st = self._st(self.e.get("raison"))
+        if st is None or st.state in ("unknown", "unavailable", "", None):
+            return ""
+        return st.state
 
     def charge_en_cours(self):
         """La mesure d'abord, l'etat en repli.

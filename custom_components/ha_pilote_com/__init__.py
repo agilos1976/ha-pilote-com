@@ -970,6 +970,11 @@ async def async_setup_entry(
         en_charge = ev_driver.charge_en_cours()
         if en_charge is not None:
             params["borne_charge"] = "1" if en_charge else "0"
+        # Pourquoi la borne ne delivre rien, selon elle-meme. C'est une reponse
+        # directe la ou tout le reste n'est que deduction.
+        raison = ev_driver.raison()
+        if raison:
+            params["borne_raison"] = str(raison)[:64]
         # Compte rendu de l'ecriture precedente. Sans lui, une consigne qui
         # n'atteint pas la borne est invisible depuis le cockpit : le serveur
         # affiche « 16 A autorises » pendant que rien ne se passe, et la

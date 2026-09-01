@@ -66,6 +66,15 @@ class WallboxDriver:
         """
         return []
 
+    def raison(self):
+        """Pourquoi la borne ne delivre rien, selon elle-meme, ou "".
+
+        Certaines bornes savent le dire — file d attente, aucune demande du
+        vehicule, limite trop basse. C est une reponse directe la ou tout le
+        reste n est que deduction.
+        """
+        return ""
+
     def etat(self):
         """Etat brut de la borne tel qu'elle le publie, ou "".
 
