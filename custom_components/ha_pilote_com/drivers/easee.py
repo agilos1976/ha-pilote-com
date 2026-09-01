@@ -114,6 +114,17 @@ RESOLUTION = {
 }
 
 
+# Repli quand l'entite de statut designee n'a plus d'etat. Tenue a l'ecart de
+# RESOLUTION : ce n'est pas une entite facultative de plus, c'est un secours
+# pour celle que l'utilisateur a lui-meme choisie.
+RESOLUTION_STATUT = {
+    "domaine": "sensor",
+    "unique":  ("_status", "_chargerstatus", "_charger_status"),
+    "classe":  (),
+    "suffixe": ("_statut", "_status"),
+}
+
+
 # Ce que l'on perd si une entite n'est pas reconnue.
 DEGRADATION = {
     "power":  "la mesure de puissance envoyee au serveur",
@@ -173,6 +184,31 @@ class EaseeDriver(WallboxDriver):
             trouve = self._resoudre(voisines, r)
             if trouve:
                 self.e[role] = trouve
+
+        # Une entite peut figurer au registre sans avoir d etat : elle a ete
+        # desactivee, ou renommee puis recreee. async_prepare se contentait de
+        # la trouver au registre — il passait donc — et tout le reste echouait
+        # ensuite en silence : _statut() rendait "", plugged() rendait None,
+        # l etat de la borne n arrivait jamais au serveur, et le cockpit
+        # n avait plus que la puissance AUTORISEE a afficher.
+        #
+        # En AVERTISSEMENT, pas en INFO : le panneau des journaux de Home
+        # Assistant n affiche pas les INFO, et ce diagnostic-la doit se voir.
+        if self.hass.states.get(self.status) is None:
+            repli = self._resoudre(voisines, RESOLUTION_STATUT)
+            if repli is not None and self.hass.states.get(repli) is not None:
+                _LOGGER.warning(
+                    "Easee : %s figure au registre mais n a aucun etat "
+                    "(entite desactivee ?). Le pilote se rabat sur %s, trouve "
+                    "sur le meme appareil.", self.status, repli)
+                self.status = repli
+            else:
+                _LOGGER.warning(
+                    "Easee : %s figure au registre mais n a aucun etat — "
+                    "entite desactivee ? Sans statut, le pilote ignore si la "
+                    "voiture est branchee et si elle charge. Reactive cette "
+                    "entite, ou reconfigure l integration en designant le "
+                    "capteur de statut de la borne.", self.status)
 
         manquant = [r for r in RESOLUTION if r not in self.e]
         _LOGGER.info(
@@ -239,6 +275,12 @@ class EaseeDriver(WallboxDriver):
         if s in ("unavailable", "unknown", ""):
             return None
         return s not in HORS_SESSION
+
+    def entites_manquantes(self):
+        manque = [r for r in RESOLUTION if r not in self.e]
+        if self._st(self.status) is None:
+            manque.append("statut")
+        return manque
 
     def etat(self):
         return self._statut()

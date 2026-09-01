@@ -958,6 +958,12 @@ async def async_setup_entry(
         # cockpit annoncait la puissance AUTORISEE comme si elle etait delivree
         # — 11 kW affiches pendant que la voiture ne prenait rien. L'etat, lui,
         # vient de l'entite que l'utilisateur a designee : il est toujours la.
+        # Toujours envoye, meme vide : sa presence atteste de la version du
+        # plugin, ce que l'absence des autres champs ne permet pas de
+        # distinguer d'une entite non reconnue. Ce diagnostic vivait dans une
+        # ligne de journal en INFO, que le panneau de Home Assistant n'affiche
+        # pas — le chercher a coute plusieurs allers-retours.
+        params["borne_manque"] = ",".join(ev_driver.entites_manquantes()) or "-"
         etat = ev_driver.etat()
         if etat:
             params["borne_etat"] = str(etat)[:32]

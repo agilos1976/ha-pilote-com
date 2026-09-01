@@ -55,6 +55,17 @@ class WallboxDriver:
         """Puissance de charge en W, ou None."""
         return None
 
+    def entites_manquantes(self):
+        """Roles que le pilote n a pas su rattacher a une entite.
+
+        Ce diagnostic vivait dans une ligne de journal en niveau INFO, donc
+        invisible dans le panneau des journaux de Home Assistant, qui n affiche
+        par defaut que les avertissements. Le chercher demandait de charger le
+        journal complet — plusieurs allers-retours pour une information que le
+        plugin peut simplement transmettre.
+        """
+        return []
+
     def etat(self):
         """Etat brut de la borne tel qu'elle le publie, ou "".
 
