@@ -876,7 +876,23 @@ async def async_setup_entry(
             if store.pop("ev_release", False) and ev_driver.amps is not None:
                 await ev_driver.release()
                 _LOGGER.info("Pilotage VE desactive : borne rendue a l'utilisateur")
+            # Apres un redemarrage de Home Assistant, l'interrupteur reprend son
+            # etat memorise sans transition : rien n'etait journalise, et le
+            # plugin se taisait indefiniment sans qu'une seule ligne dise
+            # pourquoi. Vu du serveur, cela ne se distingue pas d'une panne —
+            # c'est exactement ce qu'annonce "pilote_actif: false" pendant des
+            # heures.
+            if not ev_state.get("off_dit"):
+                _LOGGER.info(
+                    "Pilotage VE en veille : l'interrupteur "
+                    "'Pilote optimise votre recharge VE' est sur Arret. Aucune "
+                    "consigne ne partira vers la borne tant qu'il n'est pas "
+                    "remis sur Marche.")
+                ev_state["off_dit"] = True
             return
+        if ev_state.get("off_dit"):
+            _LOGGER.info("Pilotage VE reactive")
+            ev_state["off_dit"] = False
 
         loop_now = asyncio.get_event_loop().time()
         if ev_state["last_ok"] is None:
