@@ -54,6 +54,15 @@ REVEIL_MAX      = 3     # tentatives par branchement
 # Statuts pour lesquels aucun vehicule n'est presente a la borne.
 HORS_SESSION = ("disconnected", "unavailable", "unknown", "none", "")
 
+# La borne tient la session fermee parce qu'une PROGRAMMATION lui dit d'attendre
+# son heure. Aucune commande d'ouverture n'en vient a bout : 'start' demande a
+# la borne de charger, le programme lui dit de ne pas le faire, et le programme
+# gagne. Le seul geste qui passe outre est 'override_schedule' — d'ou le bouton
+# « Ignorer la programmation » qu'Easee expose sur l'appareil.
+EN_ATTENTE_PROGRAMME = ("awaiting_start", "awaiting_authorization", "awaiting_schedule")
+# Une fois toutes les cinq minutes suffit ; on ne martele pas un bouton.
+OVERRIDE_MIN_INTERVAL = 300
+
 # Comment reconnaitre les entites voisines sur l'appareil. Trois couches, de
 # la plus fiable a la plus faible :
 #
@@ -92,6 +101,13 @@ RESOLUTION = {
         "classe":  (),
         "suffixe": ("_recharge_intelligente", "_smart_charging"),
     },
+    "override": {
+        "domaine": "button",
+        "unique":  ("_override_schedule", "_overrideschedule"),
+        "classe":  (),
+        "suffixe": ("_ignorer_la_programmation", "_override_schedule",
+                    "_ignorer_la_programmation_de_charge"),
+    },
 }
 
 
@@ -101,6 +117,7 @@ DEGRADATION = {
     "online":  "la detection de borne hors ligne",
     "enable":  "le reveil de la borne si elle a ete desactivee",
     "smart":   "la garantie que la recharge intelligente Easee ne reprend pas la main",
+    "override": "la possibilite de passer outre une programmation de la borne",
 }
 
 
@@ -123,6 +140,7 @@ class EaseeDriver(WallboxDriver):
         self.reveils = 0
         self.dernier_reveil = 0.0
         self.reveil_dit = False
+        self.dernier_override = 0.0
 
     # ------------------------------------------------------------------
     # Resolution
@@ -154,9 +172,11 @@ class EaseeDriver(WallboxDriver):
 
         manquant = [r for r in RESOLUTION if r not in self.e]
         _LOGGER.info(
-            "Easee : statut=%s puissance=%s lien=%s actif=%s intelligente=%s",
+            "Easee : statut=%s puissance=%s lien=%s actif=%s intelligente=%s "
+            "ignorer-programme=%s",
             self.status, self.e.get("power", "-"), self.e.get("online", "-"),
             self.e.get("enable", "-"), self.e.get("smart", "-"),
+            self.e.get("override", "-"),
         )
         if manquant:
             # Aucune de ces entites n'est indispensable — le pilotage marche
@@ -301,6 +321,29 @@ class EaseeDriver(WallboxDriver):
                 "du courant a la place du planning Pilote")
             await self.hass.services.async_call(
                 "switch", "turn_off", {"entity_id": eid}, blocking=True)
+
+    async def _ignorer_programme(self) -> bool:
+        """Passe outre une programmation de la borne.
+
+        Une borne en 'awaiting_start' n a pas refuse la charge : elle attend
+        l heure que son programme lui a fixee. Lui envoyer 'start' ne sert a
+        rien, le programme reprend la main aussitot — et l echelle de reveil ne
+        peut rien non plus, puisque la voiture, elle, va tres bien. C est la
+        borne qui dit non.
+        """
+        eid = self.e.get("override")
+        if not eid:
+            return False
+        maintenant = time.monotonic()
+        if maintenant - self.dernier_override < OVERRIDE_MIN_INTERVAL:
+            return False
+        self.dernier_override = maintenant
+        _LOGGER.info(
+            "Easee : la borne est en '%s' — une programmation lui dit "
+            "d attendre. Pilote passe outre (%s).", self._statut(), eid)
+        await self.hass.services.async_call(
+            "button", "press", {"entity_id": eid}, blocking=True)
+        return True
 
     async def _reveil(self, amperes: int) -> None:
         """Provoque une transition du signal pilote pour reveiller le vehicule.
@@ -467,6 +510,16 @@ class EaseeDriver(WallboxDriver):
 
             if self._statut() != "charging" and not circule:
                 maintenant = time.monotonic()
+                # Une programmation de borne se traite AVANT tout le reste : ni
+                # 'start' ni l echelle de reveil n y peuvent quoi que ce soit, et
+                # attendre 150 s pour tenter des gestes inoperants ne ferait que
+                # retarder le seul qui marche.
+                if self._statut() in EN_ATTENTE_PROGRAMME:
+                    if await self._ignorer_programme():
+                        await asyncio.sleep(2)
+                        await self._svc("action_command", {"action_command": "start"})
+                        self.dernier_start = maintenant
+                        return
                 if maintenant - self.dernier_start >= START_MIN_INTERVAL:
                     await self._svc("action_command", {"action_command": "start"})
                     self.dernier_start = maintenant
