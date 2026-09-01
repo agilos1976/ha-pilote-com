@@ -12,8 +12,14 @@ generique ne devine :
 1. Reecrire la meme limite est sans effet : la borne ne re-emet pas son signal
    et la voiture ne voit rien passer. On ecrit donc une valeur voisine, puis
    la vraie deux secondes apres.
-2. time_to_live doit valoir 0. Sinon la limite expire et la borne remonte
-   d'elle-meme au calibre du circuit, en plein milieu d'un suivi solaire.
+2. time_to_live se compte en MINUTES et doit etre NON NUL. J avais ecrit ici
+   l inverse — « doit valoir 0, sinon la limite expire » — et c etait faux :
+   l automatisation de l utilisateur, qui fait charger la voiture depuis des
+   mois, pose 15 minutes et reecrit toutes les 5. Avec 0 la consigne ne prend
+   pas, l appel Home Assistant reussit quand meme, et la borne garde la limite
+   precedente. Pilote croyait piloter le courant sans jamais y toucher.
+   Corollaire : la limite porte une echeance, il faut donc la RENOUVELER
+   regulierement, pas seulement quand la valeur change.
 3. La recharge intelligente Easee doit rester a l'arret : active, elle decide
    du courant a notre place et entre en conflit avec le planning du cockpit.
 4. Ouvrir une session demande une commande explicite (start) ; regler le
@@ -32,6 +38,12 @@ from . import WallboxDriver
 from ..const import CONF_EV_EASEE_STATUS
 
 _LOGGER = logging.getLogger(__name__)
+
+# Duree de vie de la consigne de courant, en minutes, et cadence de
+# renouvellement. Trois fois plus court que l echeance : une ecriture perdue
+# ne laisse pas la limite retomber.
+TTL_LIMITE = 15
+RENOUVELLEMENT = 300
 
 # Intervalle minimal entre deux commandes d'ouverture de session.
 START_MIN_INTERVAL = 60
@@ -362,21 +374,25 @@ class EaseeDriver(WallboxDriver):
         await self.hass.services.async_call(
             "easee", service, dict(data, device_id=self.device_id), blocking=True)
 
-    async def _limite(self, amperes: int):
-        """Ecrit la limite dynamique en forcant la borne a la re-emettre.
+    async def _limite(self, amperes: int, reemettre: bool = True):
+        """Ecrit la limite dynamique de courant.
 
-        La valeur voisine est prise au-dessus, sauf au plafond ou il n'y a
-        plus de place : on passe alors juste en dessous.
+        reemettre : passer d abord par une valeur voisine, pour forcer la borne
+        a re-emettre son signal — reecrire la meme valeur ne produit rien de
+        visible pour la voiture. Inutile lors d un simple renouvellement
+        d echeance, ou la valeur ne change pas et la charge est en cours.
         """
-        plafond = self.max_amps() or 32
-        voisin = amperes - 1 if amperes >= plafond else amperes + 1
-        if voisin < 6:
-            voisin = amperes + 1
+        self.derniere_limite = time.monotonic()
+        if reemettre:
+            plafond = self.max_amps() or 32
+            voisin = amperes - 1 if amperes >= plafond else amperes + 1
+            if voisin < 6:
+                voisin = amperes + 1
+            await self._svc("set_charger_dynamic_limit",
+                            {"current": voisin, "time_to_live": TTL_LIMITE})
+            await asyncio.sleep(2)
         await self._svc("set_charger_dynamic_limit",
-                        {"current": voisin, "time_to_live": 0})
-        await asyncio.sleep(2)
-        await self._svc("set_charger_dynamic_limit",
-                        {"current": amperes, "time_to_live": 0})
+                        {"current": amperes, "time_to_live": TTL_LIMITE})
 
     async def _intelligente_off(self):
         eid = self.e.get("smart")
@@ -458,7 +474,7 @@ class EaseeDriver(WallboxDriver):
             # acquis ce qu'on n'a pas verifie. Le cycle suivant reecrira.
             try:
                 await self._svc("set_charger_dynamic_limit",
-                                {"current": 0, "time_to_live": 0})
+                                {"current": 0, "time_to_live": TTL_LIMITE})
                 await asyncio.sleep(6)
             finally:
                 self.amps = None
@@ -550,6 +566,13 @@ class EaseeDriver(WallboxDriver):
 
             if amperes != self.amps:
                 await self._limite(amperes)
+                self.amps = amperes
+            elif time.monotonic() - self.derniere_limite >= RENOUVELLEMENT:
+                # La consigne expire au bout de TTL_LIMITE minutes. Ne l ecrire
+                # que lorsqu elle change la laissait retomber en pleine charge —
+                # c est exactement ce que fait l automatisation de reference,
+                # qui la repose toutes les cinq minutes sans jamais la changer.
+                await self._limite(amperes, reemettre=False)
                 self.amps = amperes
 
             if self.paused:
@@ -670,7 +693,7 @@ class EaseeDriver(WallboxDriver):
         """Rend la borne dans son comportement d'origine."""
         plafond = self.max_amps() or 16
         await self._svc("set_charger_dynamic_limit",
-                        {"current": plafond, "time_to_live": 0})
+                        {"current": plafond, "time_to_live": TTL_LIMITE})
         if self.plugged() is not True:
             # Le mode automatique ne se change pas sereinement avec un
             # vehicule presente : on attend qu'il soit debranche.
