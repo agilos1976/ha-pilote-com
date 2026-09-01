@@ -38,6 +38,19 @@ START_MIN_INTERVAL = 60
 # Idem pour la mise en pause, quand la borne refuse de s'arreter.
 PAUSE_MIN_INTERVAL = 60
 
+# --- Reveil d'un vehicule en veille profonde -------------------------------
+# Une voiture laissee branchee sans charger finit par endormir son calculateur
+# de charge, pour ne pas vider sa batterie 12 V. Elle ne surveille alors plus
+# le signal pilote, et rouvrir la session ne sert a rien : repeter 'start' ne
+# produit aucune transition, et c'est la transition qui reveille.
+#
+# D'ou une echelle de trois barreaux, du plus doux au plus brutal. Chacun
+# provoque une rupture du signal plus franche que le precedent ; on ne monte
+# d'un cran que si le precedent n'a rien donne.
+REVEIL_APRES    = 150   # s de courant offert sans qu'un ampere circule
+REVEIL_INTERVAL = 180   # s entre deux tentatives
+REVEIL_MAX      = 3     # tentatives par branchement
+
 # Statuts pour lesquels aucun vehicule n'est presente a la borne.
 HORS_SESSION = ("disconnected", "unavailable", "unknown", "none", "")
 
@@ -104,6 +117,12 @@ class EaseeDriver(WallboxDriver):
         self.paused = None
         self.dernier_start = 0.0
         self.dernier_pause = 0.0
+        # Depuis quand du courant est offert sans qu'un ampere circule, et ou
+        # en est l'echelle de reveil pour ce branchement.
+        self.offre_depuis = 0.0
+        self.reveils = 0
+        self.dernier_reveil = 0.0
+        self.reveil_dit = False
 
     # ------------------------------------------------------------------
     # Resolution
@@ -263,10 +282,91 @@ class EaseeDriver(WallboxDriver):
             await self.hass.services.async_call(
                 "switch", "turn_off", {"entity_id": eid}, blocking=True)
 
+    async def _reveil(self, amperes: int) -> None:
+        """Provoque une transition du signal pilote pour reveiller le vehicule.
+
+        Trois barreaux, du plus doux au plus franc. On ne monte d'un cran que
+        si le precedent n'a rien donne, parce que chacun coute plus cher que
+        le precedent en renegociation pour la voiture.
+        """
+        self.reveils += 1
+        self.dernier_reveil = time.monotonic()
+        attente = int(self.dernier_reveil - self.offre_depuis)
+        _LOGGER.warning(
+            "Easee : %d s de courant offert sans qu'un ampere circule — le "
+            "vehicule est probablement en veille profonde. Tentative de "
+            "reveil %d/%d.", attente, self.reveils, REVEIL_MAX)
+
+        if self.reveils == 1:
+            # Refermer puis rouvrir la session. La borne retire sa modulation
+            # et la re-emet : cela suffit a un vehicule simplement assoupi.
+            await self._svc("action_command", {"action_command": "pause"})
+            await asyncio.sleep(4)
+            await self._svc("action_command", {"action_command": "resume"})
+            await asyncio.sleep(2)
+            await self._svc("action_command", {"action_command": "start"})
+            self.paused = False
+            self.dernier_start = time.monotonic()
+            # Rouvrir une session remet parfois la limite au calibre du
+            # circuit : on oublie la notre pour la faire reecrire au cycle
+            # suivant. Meme piege que dans la bascule de phases.
+            self.amps = None
+            return
+
+        if self.reveils == 2:
+            # Une limite nulle fait disparaitre la modulation elle-meme ; la
+            # remonter la recree de zero. La rupture est plus nette qu'un
+            # pause/resume, que la borne peut traiter sans couper le signal.
+            await self._svc("set_charger_dynamic_limit",
+                            {"current": 0, "time_to_live": 0})
+            await asyncio.sleep(6)
+            await self._limite(amperes)
+            self.amps = amperes
+            await self._svc("action_command", {"action_command": "resume"})
+            await asyncio.sleep(2)
+            await self._svc("action_command", {"action_command": "start"})
+            self.paused = False
+            self.dernier_start = time.monotonic()
+            return
+
+        # Dernier recours : desactiver la borne. Le vehicule voit disparaitre
+        # le signal pilote lui-meme, ce qui equivaut electriquement au
+        # debranchement — le seul geste dont on sait qu'il reveille tout le
+        # monde, et celui qu'on cherche justement a eviter a l'utilisateur.
+        #
+        # Rester coupee n'est pas un risque : la remise en marche est reecrite
+        # plus haut a chaque consigne >= 6 A, y compris apres un redemarrage de
+        # Home Assistant qui interromprait cette sequence.
+        eid = self.e.get("enable")
+        if not eid:
+            _LOGGER.warning(
+                "Easee : dernier recours indisponible — l'interrupteur "
+                "d'activation de la borne n'a pas ete reconnu sur l'appareil.")
+            return
+        await self.hass.services.async_call(
+            "switch", "turn_off", {"entity_id": eid}, blocking=True)
+        await asyncio.sleep(8)
+        await self.hass.services.async_call(
+            "switch", "turn_on", {"entity_id": eid}, blocking=True)
+        await asyncio.sleep(3)
+        await self._limite(amperes)
+        self.amps = amperes
+        await self._svc("action_command", {"action_command": "start"})
+        self.paused = False
+        self.dernier_start = time.monotonic()
+
     async def apply(self, amperes: int, phases: int) -> None:
         plafond = self.max_amps()
         if plafond and amperes:
             amperes = min(amperes, plafond)
+
+        # Un debranchement solde l'echelle : le vehicule suivant n'a pas a
+        # payer les tentatives infructueuses du precedent.
+        if self._statut() in HORS_SESSION:
+            self.offre_depuis = 0.0
+            self.reveils = 0
+            self.dernier_reveil = 0.0
+            self.reveil_dit = False
 
         if amperes and amperes > 0:
             await self._intelligente_off()
@@ -325,11 +425,41 @@ class EaseeDriver(WallboxDriver):
             # ce que montrent les allers-retours du journal Easee.
             pw = self.power_w()
             circule = (pw is not None and pw > 200)
+            # Depuis quand offrons-nous du courant en pure perte ? La mesure
+            # tranche, pas le statut : la borne reste volontiers en
+            # 'ready_to_charge' pendant qu'une voiture charge tres bien.
+            if circule:
+                if self.reveils:
+                    _LOGGER.info(
+                        "Easee : le vehicule a repris le courant apres %d "
+                        "tentative(s) de reveil.", self.reveils)
+                self.offre_depuis = 0.0
+                self.reveils = 0
+                self.reveil_dit = False
+            elif self.offre_depuis == 0.0:
+                self.offre_depuis = time.monotonic()
+
             if self._statut() != "charging" and not circule:
                 maintenant = time.monotonic()
                 if maintenant - self.dernier_start >= START_MIN_INTERVAL:
                     await self._svc("action_command", {"action_command": "start"})
                     self.dernier_start = maintenant
+                # Repeter 'start' ne reveille personne : la commande ne produit
+                # aucune transition du signal pilote, et c'est la transition
+                # que le vehicule endormi attend. Au bout de REVEIL_APRES on
+                # change donc de moyen plutot que de repeter le meme.
+                if (self.reveils < REVEIL_MAX
+                        and self.offre_depuis > 0.0
+                        and maintenant - self.offre_depuis >= REVEIL_APRES
+                        and maintenant - self.dernier_reveil >= REVEIL_INTERVAL):
+                    await self._reveil(amperes)
+                elif self.reveils >= REVEIL_MAX and not self.reveil_dit:
+                    _LOGGER.warning(
+                        "Easee : les %d tentatives de reveil ont echoue. Le "
+                        "vehicule ne repond plus au signal pilote ; seul un "
+                        "debranchement puis rebranchement du cable le "
+                        "relancera.", REVEIL_MAX)
+                    self.reveil_dit = True
             else:
                 self.dernier_start = 0.0
             return
@@ -358,6 +488,10 @@ class EaseeDriver(WallboxDriver):
             self.paused = True
             self.dernier_pause = maintenant
         self.amps = 0
+        # Plus de courant offert : le chronometre du reveil n a plus d objet.
+        # Le laisser armer aurait declenche une tentative des la reprise, sur
+        # une attente accumulee alors que la borne etait a l arret.
+        self.offre_depuis = 0.0
 
     async def release(self) -> None:
         """Rend la borne dans son comportement d'origine."""
