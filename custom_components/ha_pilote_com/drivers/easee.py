@@ -63,6 +63,9 @@ EN_ATTENTE_PROGRAMME = ("awaiting_start", "awaiting_authorization", "awaiting_sc
 # Une fois toutes les cinq minutes suffit ; on ne martele pas un bouton.
 OVERRIDE_MIN_INTERVAL = 300
 
+# Intervalle de reecriture de la consigne de courant quand rien ne circule.
+RELANCE_LIMITE = 120
+
 # Comment reconnaitre les entites voisines sur l'appareil. Trois couches, de
 # la plus fiable a la plus faible :
 #
@@ -141,6 +144,7 @@ class EaseeDriver(WallboxDriver):
         self.dernier_reveil = 0.0
         self.reveil_dit = False
         self.dernier_override = 0.0
+        self.derniere_limite = 0.0
 
     # ------------------------------------------------------------------
     # Resolution
@@ -380,11 +384,23 @@ class EaseeDriver(WallboxDriver):
             # Une limite nulle fait disparaitre la modulation elle-meme ; la
             # remonter la recree de zero. La rupture est plus nette qu'un
             # pause/resume, que la borne peut traiter sans couper le signal.
-            await self._svc("set_charger_dynamic_limit",
-                            {"current": 0, "time_to_live": 0})
-            await asyncio.sleep(6)
-            await self._limite(amperes)
-            self.amps = amperes
+            #
+            # try/finally imperatif : entre la mise a zero et sa restauration,
+            # une exception, un redemarrage de Home Assistant ou une liaison
+            # Easee defaillante laisserait la borne a 0 A. Elle afficherait
+            # alors 'ready_to_charge' en delivrant 0 kW — indiscernable d'une
+            # voiture qui refuse — et rien ne l'en sortirait, puisque apply()
+            # ne reecrit la limite que si elle differe de sa memoire.
+            #
+            # self.amps = None, jamais la valeur voulue : on ne prend pas pour
+            # acquis ce qu'on n'a pas verifie. Le cycle suivant reecrira.
+            try:
+                await self._svc("set_charger_dynamic_limit",
+                                {"current": 0, "time_to_live": 0})
+                await asyncio.sleep(6)
+            finally:
+                self.amps = None
+                await self._limite(amperes)
             await self._svc("action_command", {"action_command": "resume"})
             await asyncio.sleep(2)
             await self._svc("action_command", {"action_command": "start"})
@@ -505,6 +521,7 @@ class EaseeDriver(WallboxDriver):
                 self.offre_depuis = 0.0
                 self.reveils = 0
                 self.reveil_dit = False
+                self.derniere_limite = 0.0
             elif self.offre_depuis == 0.0:
                 self.offre_depuis = time.monotonic()
 
@@ -520,6 +537,21 @@ class EaseeDriver(WallboxDriver):
                         await self._svc("action_command", {"action_command": "start"})
                         self.dernier_start = maintenant
                         return
+                # La memoire de la limite dit ce que NOUS avons demande, pas ce
+                # que la borne applique. Le fichier tire deja cette lecon pour
+                # la pause ; elle vaut tout autant ici. Une limite restee a zero
+                # — sequence interrompue, ecriture perdue, automatisation tierce
+                # — se voit exactement comme une voiture qui refuse, et notre
+                # memoire nous interdisait de la corriger.
+                if (amperes >= 6
+                        and maintenant - self.derniere_limite >= RELANCE_LIMITE):
+                    self.derniere_limite = maintenant
+                    _LOGGER.info(
+                        "Easee : rien ne circule sous %d A autorises — la "
+                        "consigne de courant est reecrite plutot que supposee.",
+                        amperes)
+                    await self._limite(amperes)
+                    self.amps = amperes
                 if maintenant - self.dernier_start >= START_MIN_INTERVAL:
                     await self._svc("action_command", {"action_command": "start"})
                     self.dernier_start = maintenant
