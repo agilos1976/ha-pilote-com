@@ -216,6 +216,26 @@ class EaseeDriver(WallboxDriver):
             return None
         return s not in HORS_SESSION
 
+    def etat(self):
+        return self._statut()
+
+    def charge_en_cours(self):
+        """La mesure d'abord, l'etat en repli.
+
+        Le capteur de puissance est facultatif : s'il n'a pas ete reconnu sur
+        l'appareil, il ne reste que l'etat publie par la borne. Il est plus
+        grossier — Easee passe par 'ready_to_charge' a chaque renegociation,
+        y compris quand la voiture charge tres bien — mais il vaut infiniment
+        mieux que rien, qui se lisait jusqu'ici comme « rien ne circule ».
+        """
+        pw = self.power_w()
+        if pw is not None:
+            return pw > 200
+        s = self._statut()
+        if s in ("unavailable", "unknown", ""):
+            return None
+        return s == "charging"
+
     def power_w(self):
         st = self._st(self.e.get("power"))
         if st is None or st.state in ("unknown", "unavailable", "", None):
@@ -423,12 +443,18 @@ class EaseeDriver(WallboxDriver):
             # voiture charge tres bien : renvoyer 'start' a ce moment-la relance
             # une negociation dont personne n'avait besoin, et c'est precisement
             # ce que montrent les allers-retours du journal Easee.
-            pw = self.power_w()
-            circule = (pw is not None and pw > 200)
-            # Depuis quand offrons-nous du courant en pure perte ? La mesure
-            # tranche, pas le statut : la borne reste volontiers en
-            # 'ready_to_charge' pendant qu'une voiture charge tres bien.
-            if circule:
+            # La mesure tranche quand elle existe, l etat sinon. Ne s appuyer
+            # que sur power_w() etait un piege : le capteur de puissance est
+            # facultatif, et absent il rendait None — donc circule=False en
+            # permanence, meme pendant une charge parfaite. L echelle de reveil
+            # serait alors montee jusqu a couper la borne sur une voiture qui
+            # chargeait tres bien.
+            circule = self.charge_en_cours()
+            if circule is None:
+                # Ni mesure ni etat exploitable : on ne reveille pas sur une
+                # ignorance. Repeter 'start' reste sans danger, pas le reste.
+                self.offre_depuis = 0.0
+            elif circule:
                 if self.reveils:
                     _LOGGER.info(
                         "Easee : le vehicule a repris le courant apres %d "

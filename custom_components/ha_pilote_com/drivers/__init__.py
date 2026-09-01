@@ -55,6 +55,26 @@ class WallboxDriver:
         """Puissance de charge en W, ou None."""
         return None
 
+    def etat(self):
+        """Etat brut de la borne tel qu'elle le publie, ou "".
+
+        Distinct de power_w() : le capteur de puissance est facultatif et peut
+        ne pas etre reconnu, alors que l'etat vient de l'entite que
+        l'utilisateur a lui-meme designee. Sans lui, le cockpit ne peut
+        qu'annoncer la puissance AUTORISEE et la fait passer pour la puissance
+        delivree — 11 kW affiches pendant que la voiture ne prend rien.
+        """
+        return ""
+
+    def charge_en_cours(self):
+        """True/False si la borne sait le dire, None sinon.
+
+        C'est la reponse a « du courant circule-t-il ? », que power_w() donne
+        au watt pres quand le capteur existe et que l'etat donne grossierement
+        sinon.
+        """
+        return None
+
     def max_amps(self):
         """Plafond materiel connu de la borne, ou None.
 

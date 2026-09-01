@@ -952,6 +952,18 @@ async def async_setup_entry(
         pw_borne = ev_driver.power_w()
         if pw_borne is not None:
             params["ev"] = round(pw_borne)
+        # L'etat publie par la borne, et la reponse a « du courant circule-t-il ».
+        # Le capteur de puissance est facultatif et peut ne pas etre reconnu ;
+        # sans lui le serveur ne savait rien de ce qui se passe reellement, et le
+        # cockpit annoncait la puissance AUTORISEE comme si elle etait delivree
+        # — 11 kW affiches pendant que la voiture ne prenait rien. L'etat, lui,
+        # vient de l'entite que l'utilisateur a designee : il est toujours la.
+        etat = ev_driver.etat()
+        if etat:
+            params["borne_etat"] = str(etat)[:32]
+        en_charge = ev_driver.charge_en_cours()
+        if en_charge is not None:
+            params["borne_charge"] = "1" if en_charge else "0"
         # Compte rendu de l'ecriture precedente. Sans lui, une consigne qui
         # n'atteint pas la borne est invisible depuis le cockpit : le serveur
         # affiche « 16 A autorises » pendant que rien ne se passe, et la
