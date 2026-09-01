@@ -244,7 +244,7 @@ def _detect_counter(hass, entity_id, name):
     c_state = hass.states.get(entity_id)
     if not c_state:
         if cache.get(entity_id):
-            _LOGGER.warning("Consumer %s: entity unavailable, using cached counter=True", name)
+            _LOGGER.debug("Consumer %s: entity unavailable, using cached counter=True", name)
             return True, "", "", ""
         return None, "", "", ""
 
@@ -254,9 +254,9 @@ def _detect_counter(hass, entity_id, name):
 
     if not unit and not sc and not dc:
         if cache.get(entity_id):
-            _LOGGER.warning("Consumer %s: attributes empty, using cached counter=True", name)
+            _LOGGER.debug("Consumer %s: attributes empty, using cached counter=True", name)
             return True, sc, dc, unit
-        _LOGGER.warning("Consumer %s: attributes not loaded, skipping", name)
+        _LOGGER.debug("Consumer %s: attributes not loaded, skipping", name)
         return None, sc, dc, unit
 
     is_counter = (
@@ -402,7 +402,7 @@ async def async_setup_entry(
                         sub_h = await _get_history(hass, start, now, sub_eid, use_delta=is_counter)
                         sub_histories.append(sub_h)
                     c_history = _subtract_histories(c_history, sub_histories)
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "Consumer %s: sc=%r dc=%r unit=%r counter=%s pts=%d first=%s subs=%d",
                     name, sc, dc, unit, is_counter, len(c_history),
                     c_history[0]["value"] if c_history else "N/A",
@@ -607,7 +607,7 @@ async def async_setup_entry(
             missing = missing | c_missing
 
         if not missing:
-            _LOGGER.warning("Backfill: aucun trou détecté")
+            _LOGGER.debug("Backfill: aucun trou détecté")
             return
 
         actionable = sorted(
