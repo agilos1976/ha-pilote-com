@@ -565,7 +565,19 @@ class EaseeDriver(WallboxDriver):
                     self.amps = None
 
             if amperes != self.amps:
-                await self._limite(amperes)
+                # Ecriture SIMPLE quand la valeur change. Le passage par une
+                # valeur voisine n a de sens que pour forcer la borne a
+                # re-emettre une consigne INCHANGEE ; ici le changement suffit,
+                # et la valeur intermediaire ajoute une seconde transition du
+                # signal pilote a deux secondes de la premiere.
+                #
+                # Une Tesla l encaisse, une DS3 non : elle charge sans faillir
+                # en « Plein immediat », ou la consigne ne bouge jamais, et
+                # abandonne au bout de deux minutes en « Solaire d abord », ou
+                # elle est modulee toutes les 30 a 60 secondes. Deux sauts de
+                # PWM rapproches a chaque ajustement, quelques ajustements, et
+                # la voiture se met en defaut jusqu au debranchement.
+                await self._limite(amperes, reemettre=False)
                 self.amps = amperes
             elif time.monotonic() - self.derniere_limite >= RENOUVELLEMENT:
                 # La consigne expire au bout de TTL_LIMITE minutes. Ne l ecrire
