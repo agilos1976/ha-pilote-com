@@ -618,7 +618,16 @@ class EaseeDriver(WallboxDriver):
                 self.offre_depuis = 0.0
                 self.reveils = 0
                 self.reveil_dit = False
-                self.derniere_limite = 0.0
+                # NE PAS remettre derniere_limite a zero ici. Cette variable
+                # sert DEUX minuteries a la fois : le renouvellement d echeance
+                # plus haut, et la relance quand rien ne circule plus bas. La
+                # mettre a zero pour armer la seconde armait aussi la premiere,
+                # definitivement : l ecart au dernier ecrit devenait enorme a
+                # chaque cycle, et la consigne etait reecrite toutes les DIX
+                # SECONDES pendant toute la charge, au lieu de toutes les cinq
+                # minutes. Trente fois le trafic prevu vers l API Easee, et
+                # exactement ce que l en-tete de _svc dit ne jamais devoir se
+                # produire. Mesure faite : 29 ecritures en 29 cycles.
             elif self.offre_depuis == 0.0:
                 self.offre_depuis = time.monotonic()
 
@@ -629,6 +638,19 @@ class EaseeDriver(WallboxDriver):
                 # attendre 150 s pour tenter des gestes inoperants ne ferait que
                 # retarder le seul qui marche.
                 if self._statut() in EN_ATTENTE_PROGRAMME:
+                    # Le bouton vient d etre presse — on ne le martele pas —
+                    # ou il n a pas ete reconnu sur l appareil. Dans les deux
+                    # cas la VOITURE n y est pour rien : ne pas porter cette
+                    # attente au credit de l echelle de reveil.
+                    #
+                    # Sans cette remise a zero, une borne laissee en
+                    # 'awaiting_start' franchissait les 150 s entre deux
+                    # pressions du bouton, et l echelle se deroulait jusqu au
+                    # bout : pause/resume, limite a zero, puis DESACTIVATION de
+                    # la borne — pour une programmation. Elle finissait par
+                    # conseiller a l utilisateur d aller debrancher le cable,
+                    # ce qui n aurait rien change et se passe chez un client.
+                    self.offre_depuis = 0.0
                     if await self._ignorer_programme():
                         await asyncio.sleep(2)
                         await self._svc("action_command", {"action_command": "start"})
