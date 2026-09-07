@@ -86,6 +86,8 @@
         "description": "Entités de la borne sélectionnée. Pilote décide de l'ampérage et des phases d'après vos tarifs, la prévision solaire et le planning batterie ; ces entités ne servent qu'à appliquer sa décision.",
         "data": {
           "ev_easee_status": "Easee — capteur de statut",
+          "ev_tesla_status": "Tesla — statut de charge",
+          "ev_tesla_amps": "Tesla — ampérage de la voiture",
           "ev_switch": "Borne — interrupteur marche/arrêt",
           "ev_amps": "Borne — consigne d'ampérage",
           "ev_plugged": "Borne — câble branché",
@@ -93,6 +95,8 @@
         },
         "data_description": {
           "ev_easee_status": "Le seul champ nécessaire : Pilote retrouve seul la puissance, l'état du lien et les interrupteurs sur le même appareil.",
+          "ev_tesla_status": "L'état de charge publié par la borne ou le véhicule : il dit si le câble est branché et si le courant passe.",
+          "ev_tesla_amps": "La consigne de courant se règle sur LA VOITURE, pas sur la borne : la Wall Connector autorise, le véhicule décide du débit. Pilote retrouve l'interrupteur de charge sur ce même véhicule.",
           "ev_switch": "Interrupteur qui démarre et arrête la charge",
           "ev_amps": "Nombre réglable donnant le courant de charge en ampères",
           "ev_plugged": "Capteur indiquant qu'un véhicule est branché (facultatif)",

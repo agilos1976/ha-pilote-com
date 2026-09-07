@@ -118,11 +118,15 @@ class WallboxDriver:
 
 def create_driver(hass, entry, options):
     """Instancie le pilote correspondant a la marque choisie."""
-    from ..const import CONF_EV_BRAND, EV_BRAND_EASEE, EV_BRAND_GENERIC
+    from ..const import (CONF_EV_BRAND, EV_BRAND_EASEE, EV_BRAND_GENERIC,
+                         EV_BRAND_TESLA)
     from .easee import EaseeDriver
     from .generic import GenericDriver
+    from .tesla import TeslaDriver
 
     marque = options.get(CONF_EV_BRAND) or EV_BRAND_GENERIC
     if marque == EV_BRAND_EASEE:
         return EaseeDriver(hass, entry, options)
+    if marque == EV_BRAND_TESLA:
+        return TeslaDriver(hass, entry, options)
     return GenericDriver(hass, entry, options)

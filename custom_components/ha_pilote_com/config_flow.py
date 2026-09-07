@@ -27,12 +27,15 @@ from .const import (
     CONF_EV_AMPS,
     CONF_EV_BRAND,
     CONF_EV_EASEE_STATUS,
+    CONF_EV_TESLA_AMPS,
+    CONF_EV_TESLA_STATUS,
     CONF_EV_PLUGGED,
     CONF_EV_POWER,
     CONF_EV_SWITCH,
     EV_BRAND_EASEE,
     EV_BRAND_GENERIC,
     EV_BRAND_NONE,
+    EV_BRAND_TESLA,
     CONF_GRID_ENTITY,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_HA_TOKEN,
@@ -156,6 +159,7 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
                 SelectOptionDict(value=EV_BRAND_NONE, label="Aucune borne pilotee"),
                 SelectOptionDict(value=EV_BRAND_GENERIC, label="Borne generique (interrupteur + amperage)"),
                 SelectOptionDict(value=EV_BRAND_EASEE, label="Easee"),
+                SelectOptionDict(value=EV_BRAND_TESLA, label="Tesla (borne + voiture)"),
             ],
             mode=SelectSelectorMode.DROPDOWN,
         )
@@ -366,6 +370,17 @@ def _wallbox_schema(marque: str, defaults: dict | None = None) -> vol.Schema:
         # borne sont sur ce meme appareil.
         schema[vol.Optional(CONF_EV_EASEE_STATUS, description={"suggested_value": d.get(CONF_EV_EASEE_STATUS, "")})] = EntitySelector(
             EntitySelectorConfig(domain="sensor", integration="easee")
+        )
+    elif marque == EV_BRAND_TESLA:
+        # Deux entites sur DEUX appareils : la Wall Connector n'module pas le
+        # courant, elle autorise, et c'est la voiture qui decide du debit.
+        # L'interrupteur de charge est retrouve sur l'appareil du vehicule,
+        # celui que designe le champ d'amperage.
+        schema[vol.Optional(CONF_EV_TESLA_STATUS, description={"suggested_value": d.get(CONF_EV_TESLA_STATUS, "")})] = EntitySelector(
+            EntitySelectorConfig(domain=["sensor", "binary_sensor"])
+        )
+        schema[vol.Optional(CONF_EV_TESLA_AMPS, description={"suggested_value": d.get(CONF_EV_TESLA_AMPS, "")})] = EntitySelector(
+            EntitySelectorConfig(domain="number")
         )
     elif marque == EV_BRAND_GENERIC:
         schema[vol.Optional(CONF_EV_SWITCH, description={"suggested_value": d.get(CONF_EV_SWITCH, "")})] = EntitySelector(

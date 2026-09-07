@@ -63,6 +63,7 @@ SERIES = [
     ("programme", "Borne en attente de sa programmation"),
     ("reveil",    "Véhicule en veille profonde"),
     ("arret",     "Arrêt de la charge"),
+    ("tesla",     "Borne Tesla — la voiture porte la consigne"),
 ]
 
 

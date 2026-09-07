@@ -86,6 +86,8 @@
         "description": "Entities of the selected station. Pilote decides the current and the number of phases from your tariffs, the solar forecast and the battery plan; these entities only carry out its decision.",
         "data": {
           "ev_easee_status": "Easee — status sensor",
+          "ev_tesla_status": "Tesla — charging status",
+          "ev_tesla_amps": "Tesla — car charging amps",
           "ev_switch": "Station — on/off switch",
           "ev_amps": "Station — current setpoint",
           "ev_plugged": "Station — cable plugged in",
@@ -93,6 +95,8 @@
         },
         "data_description": {
           "ev_easee_status": "The only field needed: Pilote finds the power, link state and switches by itself on the same device.",
+          "ev_tesla_status": "The charging state published by the wallbox or the car: it tells whether the cable is plugged in and whether current is flowing.",
+          "ev_tesla_amps": "The current setpoint is written to THE CAR, not the wallbox: the Wall Connector authorises, the vehicle decides the rate. Pilote finds the charge switch on that same vehicle.",
           "ev_switch": "Switch that starts and stops charging",
           "ev_amps": "Number entity giving the charging current in amperes",
           "ev_plugged": "Sensor telling that a vehicle is plugged in (optional)",

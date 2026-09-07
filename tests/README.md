@@ -36,6 +36,7 @@ quelques millisecondes, et les temporisations sont vérifiées à la seconde.
 | **Programmation** | Le bouton « ignorer la programmation » pressé, sans le marteler ; l'échelle de réveil laissée hors du coup. |
 | **Réveil** | Les trois barreaux dans l'ordre, jamais laissée à 0 A même interrompue, jamais déclenchée sur une charge saine. |
 | **Arrêt** | Pause plutôt que fermeture de session, insistance si la borne débite quand même, borne rendue proprement. |
+| **Tesla** | L'interrupteur de charge retrouvé parmi ses homonymes (`charge_port_door`, `charge_limit`), l'arrêt qui coupe vraiment au lieu de baisser l'ampérage, et le silence quand rien ne change — une Tesla se réveille à chaque ordre. |
 
 ## Vérifier que la suite mord encore
 

@@ -178,8 +178,8 @@ def _paquets_synthetiques():
         sys.modules[nom] = mod
 
 
-def charger_easee(inscriptions=()):
-    """Importe le VRAI easee.py, avec ses dépendances en carton."""
+def charger_pilote(nom, inscriptions=()):
+    """Importe le VRAI module d'un pilote, avec ses dépendances en carton."""
     _faux_homeassistant(list(inscriptions))
     if RACINE not in sys.path:
         sys.path.insert(0, RACINE)
@@ -188,7 +188,11 @@ def charger_easee(inscriptions=()):
             del sys.modules[m]
     _paquets_synthetiques()
     return importlib.import_module(
-        "custom_components.ha_pilote_com.drivers.easee")
+        "custom_components.ha_pilote_com.drivers." + nom)
+
+
+def charger_easee(inscriptions=()):
+    return charger_pilote("easee", inscriptions)
 
 
 # --------------------------------------------------------------- montage
@@ -271,6 +275,88 @@ class Banc:
                 return True
             self.horloge.avance(pas)
         return False
+
+
+# ------------------------------------------------------- montage Tesla
+# Deux appareils, et c'est tout l'intérêt du cas : le statut vient de la
+# borne, la consigne de courant s'écrit sur la voiture. Les leurres sont
+# délibérés — un vrai véhicule Tesla expose « charge_port_door » et
+# « charge_limit », qui contiennent le mot « charge » sans commander la
+# charge.
+BORNE, VOITURE = "borne-tesla", "voiture-tesla"
+ENTITES_TESLA = [
+    Inscription("sensor.wall_connector_status", "WC42_status", None, BORNE),
+    Inscription("sensor.wall_connector_power", "WC42_power", "power", BORNE),
+    Inscription("number.model3_charging_amps", "VIN9_charging_amps", None, VOITURE),
+    Inscription("switch.model3_charge", "VIN9_charge", None, VOITURE),
+    Inscription("switch.model3_charge_port_door", "VIN9_charge_port_door",
+                None, VOITURE),
+    Inscription("number.model3_charge_limit", "VIN9_charge_limit", None, VOITURE),
+    Inscription("sensor.model3_charger_power", "VIN9_charger_power",
+                "power", VOITURE),
+]
+
+T_STATUT = "sensor.wall_connector_status"
+T_AMPS = "number.model3_charging_amps"
+T_SW = "switch.model3_charge"
+T_PW = "sensor.model3_charger_power"
+
+
+class BancTesla:
+    """Une Wall Connector et une voiture, prêtes à recevoir des consignes."""
+
+    def __init__(self, statut="charging", puissance=7000, entites=None,
+                 bas=5, haut=16, amps=None, sw="off", prepare=True):
+        self.horloge = Horloge()
+        self.tesla = charger_pilote(
+            "tesla", ENTITES_TESLA if entites is None else entites)
+        self.tesla.time = self.horloge
+        self.etats = Etats()
+        self.services = Services()
+        self.hass = Hass(self.etats, self.services)
+
+        self.etats.pose(T_STATUT, statut)
+        self.etats.pose(T_AMPS, str(bas if amps is None else amps),
+                        min=bas, max=haut)
+        self.etats.pose(T_SW, sw)
+        self.etats.pose("switch.model3_charge_port_door", "off")
+        self.etats.pose("number.model3_charge_limit", "80", min=50, max=100)
+        if puissance is not None:
+            self.etats.pose(T_PW, str(puissance), unit_of_measurement="W")
+
+        self.d = self.tesla.TeslaDriver(self.hass, None, {
+            "ev_tesla_status": T_STATUT, "ev_tesla_amps": T_AMPS})
+        self.pret = asyncio.run(self.d.async_prepare()) if prepare else None
+        self.services.vider()
+
+    def statut(self, s):
+        self.etats.pose(T_STATUT, s)
+
+    def interrupteur(self, s):
+        self.etats.pose(T_SW, s)
+
+    def puissance(self, w):
+        if w is None:
+            self.etats.retire(T_PW)
+        else:
+            self.etats.pose(T_PW, str(w), unit_of_measurement="W")
+
+    def applique(self, amperes, phases=3):
+        asyncio.run(self.d.apply(amperes, phases))
+
+    def cycles(self, n, amperes, phases=3, pas=10):
+        for _ in range(n):
+            self.applique(amperes, phases)
+            self.horloge.avance(pas)
+
+    # --- lectures pratiques -------------------------------------------
+    def amperages(self):
+        return [a.data.get("value") for a in self.services.appels
+                if a.service == "set_value"]
+
+    def commutations(self):
+        return [(a.service, a.data.get("entity_id"))
+                for a in self.services.appels if a.domaine == "switch"]
 
 
 def manifeste():

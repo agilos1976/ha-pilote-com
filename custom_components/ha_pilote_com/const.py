@@ -33,12 +33,20 @@ CONF_EV_BRAND = "ev_brand"
 EV_BRAND_NONE = "none"
 EV_BRAND_GENERIC = "generic"
 EV_BRAND_EASEE = "easee"
-EV_BRANDS = [EV_BRAND_NONE, EV_BRAND_GENERIC, EV_BRAND_EASEE]
+EV_BRAND_TESLA = "tesla"
+EV_BRANDS = [EV_BRAND_NONE, EV_BRAND_GENERIC, EV_BRAND_EASEE, EV_BRAND_TESLA]
 
 # Easee : une seule entite a designer, le capteur de statut. Les services
 # Easee s'adressent a un appareil, que le registre donne depuis l'entite ;
 # les autres entites de la borne sont sur ce meme appareil.
 CONF_EV_EASEE_STATUS = "ev_easee_status"
+
+# Tesla : deux entites, sur DEUX appareils differents. La Wall Connector
+# n'module pas le courant — elle autorise, et la voiture decide du debit.
+# Le statut vient donc de la charge, et la consigne s'ecrit sur le vehicule.
+# L'interrupteur de charge est retrouve sur l'appareil du vehicule.
+CONF_EV_TESLA_STATUS = "ev_tesla_status"
+CONF_EV_TESLA_AMPS = "ev_tesla_amps"
 DEFAULT_UPDATE_INTERVAL = 15
 
 API_URL = "https://carrard.ch/pilote/api/post_data_user.php"

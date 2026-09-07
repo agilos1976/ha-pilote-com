@@ -17,37 +17,50 @@ import subprocess
 import sys
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PILOTE = os.path.join(RACINE, "custom_components", "ha_pilote_com",
-                      "drivers", "easee.py")
+PILOTES = {
+    "easee": os.path.join(RACINE, "custom_components", "ha_pilote_com",
+                          "drivers", "easee.py"),
+    "tesla": os.path.join(RACINE, "custom_components", "ha_pilote_com",
+                          "drivers", "tesla.py"),
+}
 
 if hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8",
                                   errors="replace", line_buffering=True)
 
 MUTATIONS = [
-    ("time_to_live revient à zéro — la consigne n'est jamais appliquée",
+    ("tesla", "l'arrêt passe par l'ampérage au lieu de couper la charge",
+     "        if self._allume() is not False:\n            await self._commuter(False)",
+     "        await self._ecrire_amperes(5)"),
+
+    ("tesla", "la trappe de recharge est prise pour l'interrupteur de charge",
+     "                if any(k in s for k in CLES_INTERRUPTEUR) \\\n"
+     "                        and not any(x in s for x in CLES_ECARTEES):",
+     "                if any(k in s for k in CLES_INTERRUPTEUR):"),
+
+    ("easee", "time_to_live revient à zéro — la consigne n'est jamais appliquée",
      "TTL_LIMITE = 15", "TTL_LIMITE = 0"),
 
-    ("la consigne n'est plus renouvelée avant son échéance",
+    ("easee", "la consigne n'est plus renouvelée avant son échéance",
      "RENOUVELLEMENT = 300", "RENOUVELLEMENT = 1200"),
 
-    ("la modulation repasse par une valeur voisine — le défaut de la DS3",
+    ("easee", "la modulation repasse par une valeur voisine — le défaut de la DS3",
      "await self._limite(amperes, reemettre=False)\n                self.amps = amperes\n            elif",
      "await self._limite(amperes, reemettre=True)\n                self.amps = amperes\n            elif"),
 
-    ("le barreau 2 suppose la consigne intacte au lieu de la réécrire",
+    ("easee", "le barreau 2 suppose la consigne intacte au lieu de la réécrire",
      "            finally:\n                self.amps = None",
      "            finally:\n                self.amps = amperes"),
 
-    ("la charge en cours ne se lit plus que sur la mesure",
+    ("easee", "la charge en cours ne se lit plus que sur la mesure",
      '        return s == "charging"', "        return False"),
 
     # --- les deux défauts que cette suite a trouvés ---------------------
-    ("la consigne est réécrite à chaque cycle pendant toute la charge",
+    ("easee", "la consigne est réécrite à chaque cycle pendant toute la charge",
      "                self.reveil_dit = False\n                # NE PAS remettre",
      "                self.reveil_dit = False\n                self.derniere_limite = 0.0\n                # NE PAS remettre"),
 
-    ("l'échelle de réveil se déroule sur une borne qui attend son programme",
+    ("easee", "l'échelle de réveil se déroule sur une borne qui attend son programme",
      "                    self.offre_depuis = 0.0\n                    if await self._ignorer_programme():",
      "                    if await self._ignorer_programme():"),
 ]
@@ -64,47 +77,52 @@ def lancer():
 
 
 def main():
-    with open(PILOTE, "rb") as f:
-        origine = f.read()
-    source = origine.decode("utf-8")
-
-    # Le fichier est en CRLF. Les fragments ci-dessus sont écrits en LF, comme
-    # tout le monde les lit : on les adapte plutôt que de truffer la liste de
-    # \r invisibles, où une faute ne se verrait jamais.
-    saut = "\r\n" if b"\r\n" in origine else "\n"
-    mutations = [(q, a.replace("\n", saut), b.replace("\n", saut))
-                 for q, a, b in MUTATIONS]
+    origines = {}
+    for nom, chemin in PILOTES.items():
+        with open(chemin, "rb") as f:
+            origines[nom] = f.read()
 
     print("\n  état de départ : %s\n"
           % ("la suite passe" if lancer() == 0 else "LA SUITE ÉCHOUE DÉJÀ"))
 
     manques = 0
-    for quoi, avant, apres in mutations:
-        if source.count(avant) != 1:
+    for pilote, quoi, avant, apres in MUTATIONS:
+        origine = origines[pilote]
+        source = origine.decode("utf-8")
+        # Les fichiers sont en CRLF. Les fragments ci-dessus sont écrits en LF,
+        # comme tout le monde les lit : on les adapte plutôt que de truffer la
+        # liste de \r invisibles, où une faute ne se verrait jamais.
+        saut = "\r\n" if b"\r\n" in origine else "\n"
+        a, b = avant.replace("\n", saut), apres.replace("\n", saut)
+        etiquette = "%-6s %s" % (pilote, quoi)
+        if source.count(a) != 1:
             print("  ?   %s — fragment introuvable ou ambigu (%d fois)"
-                  % (quoi, source.count(avant)))
+                  % (etiquette, source.count(a)))
             manques += 1
             continue
-        with open(PILOTE, "w", encoding="utf-8", newline="") as f:
-            f.write(source.replace(avant, apres))
+        with open(PILOTES[pilote], "w", encoding="utf-8", newline="") as f:
+            f.write(source.replace(a, b))
         code = lancer()
-        with open(PILOTE, "wb") as f:
+        with open(PILOTES[pilote], "wb") as f:
             f.write(origine)
         if code != 0:
-            print("  ✓   détecté : %s" % quoi)
+            print("  ✓   détecté : %s" % etiquette)
         else:
-            print("  ✗   NON DÉTECTÉ : %s" % quoi)
+            print("  ✗   NON DÉTECTÉ : %s" % etiquette)
             manques += 1
 
-    with open(PILOTE, "rb") as f:
-        sale = f.read() != origine
+    sales = []
+    for nom, chemin in PILOTES.items():
+        with open(chemin, "rb") as f:
+            if f.read() != origines[nom]:
+                sales.append(os.path.basename(chemin))
     print("\n  restauration : %s"
-          % ("easee.py est identique à l'original" if not sale
-             else "!! easee.py N'A PAS ÉTÉ RESTAURÉ"))
-    print("  %s\n" % ("la suite détecte les %d défauts" % len(mutations)
+          % ("les pilotes sont identiques à l'original" if not sales
+             else "!! NON RESTAURÉ : " + ", ".join(sales)))
+    print("  %s\n" % ("la suite détecte les %d défauts" % len(MUTATIONS)
                       if not manques else "%d défaut(s) passent au travers"
                       % manques))
-    return 1 if (manques or sale) else 0
+    return 1 if (manques or sales) else 0
 
 
 if __name__ == "__main__":
